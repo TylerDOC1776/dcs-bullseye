@@ -1,6 +1,6 @@
-# dcs-platform
+# bullseye
 
-DCS World server management system — monorepo workspace.
+DCS World server management system — Discord bot + orchestrator + Windows agent.
 
 ## Structure
 
@@ -9,7 +9,6 @@ DCS World server management system — monorepo workspace.
 | `orchestrator/` | Active | FastAPI orchestrator (command router, auth, jobs, audit logging) |
 | `agent/` | Active | FastAPI agent (Windows node: process control, logs, missions) |
 | `discord-bot/` | Active | DCS management Discord bot |
-| `archive/` | Archived | Python prototype (hub-and-spoke) + legacy DCSAdminBot |
 | `docs/` | Reference | API specs, architecture docs, design notes |
 | `configs/` | — | Config file examples |
 | `scripts/` | — | Dev/build/test scripts |
@@ -36,13 +35,6 @@ cd agent
 pip install -r requirements.txt
 # configure C:\ProgramData\DCSAgent\config.json
 python -m agent serve
-```
-
-### Archived prototype (reference only)
-```bash
-cd archive
-pip install -r requirements.txt
-python -m hub.server
 ```
 
 See the `docs/` folder for full architecture and API details.
