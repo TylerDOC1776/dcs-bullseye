@@ -1,0 +1,605 @@
+#Requires -RunAsAdministrator
+<#
+.SYNOPSIS
+    DCS Platform community host installer.
+
+.DESCRIPTION
+    Installs the DCS Agent, frp tunnel client, and configures your DCS World
+    server instance to be managed via the DCS Platform Discord bot.
+
+    No Tailscale or VPN required — the agent connects back to the orchestrator
+    through an encrypted frp tunnel.
+
+.PARAMETER InviteCode
+    Your invite code (format: GOON-XXXX-XXXX-XXXX). Get this from the server admin.
+
+.PARAMETER InstanceName
+    A friendly name for your DCS server shown in Discord (default: "Community Server").
+
+.PARAMETER ServiceName
+    Windows Task Scheduler task name for your DCS instance (default: "DCS-community").
+    Must be unique on this machine.
+
+.PARAMETER InstallDir
+    Where to install the DCS Agent (default: C:\DCSAgent).
+
+.EXAMPLE
+    .\install-agent.ps1 -InviteCode GOON-XXXX-XXXX-XXXX
+
+.EXAMPLE
+    .\install-agent.ps1 -InviteCode GOON-XXXX-XXXX-XXXX -InstanceName "MySquadron Server"
+#>
+[CmdletBinding(DefaultParameterSetName = "Install")]
+param(
+    [Parameter(Mandatory, ParameterSetName = "Install")]
+    [string]$InviteCode,
+
+    [Parameter(ParameterSetName = "Update")]
+    [switch]$Update,
+
+    [Parameter(Mandatory)]
+    [string]$OrchestratorUrl,
+
+    [string]$AgentZipSha256 = "",
+
+    [string]$HostName     = "",
+    [string]$InstanceName = "Community Server",
+    [string]$ServiceName  = "DCS-community",
+    [string]$InstallDir   = "C:\DCSAgent"
+)
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = "Stop"
+$ProgressPreference    = "SilentlyContinue"   # speeds up Invoke-WebRequest downloads
+
+# ── Validate orchestrator URL ───────────────────────────────────────────────────
+
+$OrchestratorUrl = $OrchestratorUrl.TrimEnd("/")
+if (-not $OrchestratorUrl.StartsWith("https://")) {
+    throw "OrchestratorUrl must use HTTPS. Received: $OrchestratorUrl"
+}
+
+# ── Constants ──────────────────────────────────────────────────────────────────
+
+$ORCHESTRATOR  = $OrchestratorUrl
+$FRPC_VERSION  = "0.61.0"
+$FRPC_ZIP_URL  = "https://github.com/fatedier/frp/releases/download/v$FRPC_VERSION/frp_${FRPC_VERSION}_windows_amd64.zip"
+$NSSM_ZIP_URL  = "https://nssm.cc/release/nssm-2.24.zip"
+
+# ── Helpers ────────────────────────────────────────────────────────────────────
+
+function Write-Step { param([string]$Msg) Write-Host "`n==> $Msg" -ForegroundColor Cyan }
+function Write-Ok   { param([string]$Msg) Write-Host "    OK: $Msg"    -ForegroundColor Green }
+function Write-Warn { param([string]$Msg) Write-Host "    WARN: $Msg"  -ForegroundColor Yellow }
+function Write-Fail { param([string]$Msg) Write-Host "    FAIL: $Msg"  -ForegroundColor Red }
+
+function Get-OrchestratorError([System.Management.Automation.ErrorRecord]$Err) {
+    try {
+        $body = $Err.ErrorDetails.Message | ConvertFrom-Json
+        return if ($body.detail) { $body.detail } else { $body.title }
+    } catch {
+        return $Err.Exception.Message
+    }
+}
+
+function Download-File([string]$Url, [string]$Dest) {
+    Write-Host "    Downloading $(Split-Path $Url -Leaf) ..." -ForegroundColor DarkGray
+    Invoke-WebRequest -Uri $Url -OutFile $Dest -UseBasicParsing
+}
+
+function Get-Sha256([string]$Path) {
+    return (Get-FileHash -Path $Path -Algorithm SHA256).Hash.ToLowerInvariant()
+}
+
+function Assert-Sha256([string]$Path, [string]$Expected) {
+    $actual = Get-Sha256 $Path
+    if ($actual -ne $Expected.ToLowerInvariant()) {
+        throw "Hash mismatch for $(Split-Path $Path -Leaf).`n  Expected: $Expected`n  Actual:   $actual"
+    }
+    Write-Ok "Hash verified: $actual"
+}
+
+# ── Banner ─────────────────────────────────────────────────────────────────────
+
+Write-Host ""
+Write-Host "============================================================" -ForegroundColor Magenta
+Write-Host "   DCS Platform  —  Community Host Installer" -ForegroundColor Magenta
+Write-Host "============================================================" -ForegroundColor Magenta
+
+# ══════════════════════════════════════════════════════════════════════════════
+# UPDATE MODE — patch agent source in-place and restart service
+# ══════════════════════════════════════════════════════════════════════════════
+if ($Update) {
+    Write-Host " Mode        : UPDATE" -ForegroundColor Yellow
+    Write-Host " Install dir : $InstallDir"
+    Write-Host ""
+
+    if (-not (Test-Path "$InstallDir\src")) {
+        throw "Agent not found at $InstallDir — run without -Update to do a fresh install."
+    }
+
+    Write-Step "Downloading latest agent source"
+    $agentZip = "$env:TEMP\dcs-agent-update.zip"
+    Download-File "$ORCHESTRATOR/install/agent.zip" $agentZip
+    if ($AgentZipSha256) { Assert-Sha256 $agentZip $AgentZipSha256 }
+
+    Write-Step "Stopping DCSAgent service"
+    Stop-Service DCSAgent -ErrorAction SilentlyContinue
+    Start-Sleep -Seconds 2
+
+    Write-Step "Extracting updated source"
+    Expand-Archive -Path $agentZip -DestinationPath "$InstallDir\src" -Force
+    Remove-Item $agentZip -ErrorAction SilentlyContinue
+
+    Write-Step "Starting DCSAgent service"
+    Start-Service DCSAgent
+    Write-Ok "DCSAgent restarted with updated source"
+
+    Write-Host ""
+    Write-Host "============================================================" -ForegroundColor Green
+    Write-Host "   Agent updated successfully!" -ForegroundColor Green
+    Write-Host "============================================================" -ForegroundColor Green
+    exit 0
+}
+
+# Prompt for a friendly host name if not passed as a parameter
+if (-not $HostName) {
+    Write-Host ""
+    Write-Host "  What should this host be called in Discord?" -ForegroundColor Cyan
+    Write-Host "  (e.g. 'DOC's Server', 'East Coast BBQ', 'MySquadron Host')" -ForegroundColor DarkGray
+    $HostName = (Read-Host "  Host name").Trim()
+    if (-not $HostName) { $HostName = $env:COMPUTERNAME }
+}
+
+Write-Host " Invite code : $InviteCode"
+Write-Host " Host name   : $HostName"
+Write-Host " Instance    : $InstanceName"
+Write-Host " Service     : $ServiceName"
+Write-Host " Install dir : $InstallDir"
+Write-Host ""
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 1. Detect DCS World Server installation
+# ══════════════════════════════════════════════════════════════════════════════
+Write-Step "Detecting DCS World Server installation"
+
+$dcsSearchPaths = @(
+    "C:\Program Files\Eagle Dynamics\DCS World OpenBeta Server\bin\DCS_server.exe",
+    "C:\Program Files\Eagle Dynamics\DCS World Server\bin\DCS_server.exe",
+    "D:\Program Files\Eagle Dynamics\DCS World OpenBeta Server\bin\DCS_server.exe",
+    "D:\Program Files\Eagle Dynamics\DCS World Server\bin\DCS_server.exe",
+    "E:\Program Files\Eagle Dynamics\DCS World OpenBeta Server\bin\DCS_server.exe",
+    "E:\Program Files\Eagle Dynamics\DCS World Server\bin\DCS_server.exe"
+)
+
+$dcsExe = $null
+foreach ($p in $dcsSearchPaths) {
+    if (Test-Path $p) { $dcsExe = $p; break }
+}
+
+if (-not $dcsExe) {
+    Write-Warn "DCS_server.exe not found in common locations."
+    $dcsExe = Read-Host "  Enter full path to DCS_server.exe"
+}
+if (-not (Test-Path $dcsExe)) { throw "DCS_server.exe not found: $dcsExe" }
+Write-Ok "DCS_server.exe: $dcsExe"
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 2. Detect DCS Saved Games profile
+# ══════════════════════════════════════════════════════════════════════════════
+Write-Step "Locating DCS Saved Games server profile"
+
+$savedGamesBase = "$env:USERPROFILE\Saved Games"
+$dcsProfiles = Get-ChildItem $savedGamesBase -Directory -Filter "DCS*" -ErrorAction SilentlyContinue |
+    Where-Object { Test-Path (Join-Path $_.FullName "Config\serverSettings.lua") }
+
+$savedGamesKey  = $null
+$savedGamesPath = $null
+
+if ($dcsProfiles.Count -eq 1) {
+    $savedGamesKey  = $dcsProfiles[0].Name
+    $savedGamesPath = $dcsProfiles[0].FullName
+    Write-Ok "Auto-detected: $savedGamesKey"
+} elseif ($dcsProfiles.Count -gt 1) {
+    Write-Host "  Multiple DCS server profiles found:"
+    for ($i = 0; $i -lt $dcsProfiles.Count; $i++) {
+        Write-Host "    [$i] $($dcsProfiles[$i].Name)"
+    }
+    $idx = [int](Read-Host "  Enter number to select")
+    $savedGamesKey  = $dcsProfiles[$idx].Name
+    $savedGamesPath = $dcsProfiles[$idx].FullName
+} else {
+    Write-Warn "No DCS server profiles found in $savedGamesBase."
+    $savedGamesKey = Read-Host "  Enter the Saved Games key (e.g. DCS.openbeta_server)"
+    $savedGamesPath = "$savedGamesBase\$savedGamesKey"
+}
+
+if (-not (Test-Path $savedGamesPath)) {
+    throw "Saved Games path does not exist: $savedGamesPath"
+}
+Write-Ok "Profile: $savedGamesPath"
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 3. Register with the orchestrator
+# ══════════════════════════════════════════════════════════════════════════════
+Write-Step "Registering with orchestrator"
+
+$regBody = @{
+    inviteCode = $InviteCode.Trim().ToUpper()
+    hostName   = $HostName
+    instances  = @(
+        @{ serviceName = $ServiceName; name = $InstanceName }
+    )
+} | ConvertTo-Json -Depth 5
+
+try {
+    $reg = Invoke-RestMethod -Uri "$ORCHESTRATOR/api/v1/register" `
+        -Method POST -Body $regBody -ContentType "application/json"
+} catch {
+    throw "Registration failed: $(Get-OrchestratorError $_)"
+}
+
+Write-Ok "Registered! Host ID   : $($reg.hostId)"
+Write-Ok "            frp port  : $($reg.frpRemotePort)"
+Write-Ok "            API key   : $($reg.agentApiKey.Substring(0,8))..."
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 4. Create install directory structure
+# ══════════════════════════════════════════════════════════════════════════════
+Write-Step "Creating install directory: $InstallDir"
+
+foreach ($d in @($InstallDir, "$InstallDir\logs", "$InstallDir\src")) {
+    New-Item -ItemType Directory -Force -Path $d | Out-Null
+}
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 5. Check / install Python 3.11+
+# ══════════════════════════════════════════════════════════════════════════════
+Write-Step "Checking Python 3.11+"
+
+$pyCmd = $null
+foreach ($candidate in @("python", "py", "python3")) {
+    try {
+        $v = & $candidate --version 2>&1
+        if ($v -match "3\.(?:1[1-9]|[2-9]\d)") { $pyCmd = $candidate; break }
+    } catch { }
+}
+
+if (-not $pyCmd) {
+    Write-Warn "Python 3.11+ not found — installing via winget (this may take a minute)..."
+    $r = winget install --id Python.Python.3.11 -e `
+        --accept-source-agreements --accept-package-agreements 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        throw "winget install Python failed. Please install Python 3.11+ manually from https://python.org and re-run."
+    }
+    # Refresh PATH
+    $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" +
+                [System.Environment]::GetEnvironmentVariable("Path", "User")
+    $pyCmd = "python"
+}
+Write-Ok "Python: $(& $pyCmd --version 2>&1)"
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 6. Download agent source from orchestrator
+# ══════════════════════════════════════════════════════════════════════════════
+Write-Step "Downloading DCS Agent"
+
+$agentZip = "$env:TEMP\dcs-agent.zip"
+Download-File "$ORCHESTRATOR/install/agent.zip" $agentZip
+if ($AgentZipSha256) { Assert-Sha256 $agentZip $AgentZipSha256 }
+Expand-Archive -Path $agentZip -DestinationPath "$InstallDir\src" -Force
+Remove-Item $agentZip -ErrorAction SilentlyContinue
+Write-Ok "Agent source extracted to $InstallDir\src"
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 7. Create Python venv and install requirements
+# ══════════════════════════════════════════════════════════════════════════════
+Write-Step "Setting up Python virtual environment"
+
+$venvDir  = "$InstallDir\venv"
+$pip      = "$venvDir\Scripts\pip.exe"
+$python   = "$venvDir\Scripts\python.exe"
+
+& $pyCmd -m venv $venvDir
+& $pip install --quiet --upgrade pip
+& $pip install --quiet -r "$InstallDir\src\requirements.txt"
+Write-Ok "venv ready: $venvDir"
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 8. Download frpc (frp client)
+# ══════════════════════════════════════════════════════════════════════════════
+Write-Step "Downloading frp client (frpc.exe)"
+
+$frpcZip = "$env:TEMP\frpc.zip"
+$frpcTmp = "$env:TEMP\frpc_extract"
+Download-File $FRPC_ZIP_URL $frpcZip
+Expand-Archive -Path $frpcZip -DestinationPath $frpcTmp -Force
+
+$frpcSrc = Get-ChildItem "$frpcTmp\*\frpc.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+if (-not $frpcSrc) { throw "frpc.exe not found in downloaded archive." }
+Copy-Item $frpcSrc.FullName "$InstallDir\frpc.exe"
+Remove-Item $frpcZip, $frpcTmp -Recurse -Force -ErrorAction SilentlyContinue
+Write-Ok "frpc.exe ready"
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 9. Download nssm (Non-Sucking Service Manager)
+# ══════════════════════════════════════════════════════════════════════════════
+Write-Step "Downloading nssm"
+
+$nssmZip = "$env:TEMP\nssm.zip"
+$nssmTmp = "$env:TEMP\nssm_extract"
+Download-File $NSSM_ZIP_URL $nssmZip
+Expand-Archive -Path $nssmZip -DestinationPath $nssmTmp -Force
+
+$nssmSrc = Get-ChildItem "$nssmTmp\*\win64\nssm.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+if (-not $nssmSrc) { throw "nssm.exe not found in downloaded archive." }
+Copy-Item $nssmSrc.FullName "$InstallDir\nssm.exe"
+Remove-Item $nssmZip, $nssmTmp -Recurse -Force -ErrorAction SilentlyContinue
+Write-Ok "nssm.exe ready"
+
+$nssm = "$InstallDir\nssm.exe"
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 10. Write agent config.json
+# ══════════════════════════════════════════════════════════════════════════════
+Write-Step "Writing agent config.json"
+
+$logPath           = "$savedGamesPath\Logs\dcs.log"
+$missionsDir       = "$savedGamesPath\Missions"
+$activeMissionsDir = "$savedGamesPath\Active Missions"
+
+New-Item -ItemType Directory -Force -Path $activeMissionsDir | Out-Null
+Write-Ok "Active Missions folder: $activeMissionsDir"
+
+$agentCfg = [ordered]@{
+    api_key             = $reg.agentApiKey
+    host                = "0.0.0.0"
+    port                = 8787
+    nssm_path           = "$InstallDir\nssm.exe"
+    log_dir             = "$InstallDir\logs"
+    active_missions_dir = $activeMissionsDir
+    instances = @(
+        [ordered]@{
+            name            = $InstanceName
+            service_name    = $ServiceName
+            exe_path        = $dcsExe
+            saved_games_key = $savedGamesKey
+            log_path        = $logPath
+            missions_dir    = $missionsDir
+            manager         = "task"
+            auto_start      = $false
+        }
+    )
+} | ConvertTo-Json -Depth 5
+
+$agentCfgPath = "$InstallDir\config.json"
+$agentCfg | Set-Content -Path $agentCfgPath -Encoding UTF8
+Write-Ok "config.json written"
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 11. Write frpc.toml
+# ══════════════════════════════════════════════════════════════════════════════
+Write-Step "Writing frpc.toml"
+
+$frpcToml = @"
+serverAddr = "$($reg.frpServerAddr)"
+serverPort = $($reg.frpServerPort)
+
+[auth]
+method = "token"
+token = "$($reg.frpToken)"
+
+[[proxies]]
+name = "dcs-agent-$($reg.hostId)"
+type = "tcp"
+localIP = "127.0.0.1"
+localPort = 8787
+remotePort = $($reg.frpRemotePort)
+"@
+
+$frpcToml | Set-Content -Path "$InstallDir\frpc.toml" -Encoding UTF8
+Write-Ok "frpc.toml written"
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 12. Install DCSAgent Windows service (NSSM)
+# ══════════════════════════════════════════════════════════════════════════════
+Write-Step "Installing DCSAgent service"
+
+# Remove existing service if present
+$existing = Get-Service -Name "DCSAgent" -ErrorAction SilentlyContinue
+if ($existing) {
+    Write-Warn "DCSAgent service already exists — removing and reinstalling"
+    & $nssm stop DCSAgent 2>$null
+    & $nssm remove DCSAgent confirm 2>$null
+    Start-Sleep -Seconds 1
+}
+
+& $nssm install DCSAgent $python
+& $nssm set DCSAgent AppParameters "-m agent serve --config `"$agentCfgPath`""
+& $nssm set DCSAgent AppDirectory "$InstallDir\src"
+& $nssm set DCSAgent Description "DCS World Agent API"
+& $nssm set DCSAgent Start SERVICE_AUTO_START
+& $nssm set DCSAgent AppStdout "$InstallDir\logs\agent.log"
+& $nssm set DCSAgent AppStderr "$InstallDir\logs\agent.log"
+& $nssm set DCSAgent AppRotateFiles 1
+& $nssm set DCSAgent AppRotateSeconds 86400
+Write-Ok "DCSAgent service installed"
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 13. Install DCSAgentFrpc service (NSSM)
+# ══════════════════════════════════════════════════════════════════════════════
+Write-Step "Installing DCSAgentFrpc tunnel service"
+
+$existingFrpc = Get-Service -Name "DCSAgentFrpc" -ErrorAction SilentlyContinue
+if ($existingFrpc) {
+    Write-Warn "DCSAgentFrpc service already exists — removing and reinstalling"
+    & $nssm stop DCSAgentFrpc 2>$null
+    & $nssm remove DCSAgentFrpc confirm 2>$null
+    Start-Sleep -Seconds 1
+}
+
+& $nssm install DCSAgentFrpc "$InstallDir\frpc.exe"
+& $nssm set DCSAgentFrpc AppParameters "-c `"$InstallDir\frpc.toml`""
+& $nssm set DCSAgentFrpc AppDirectory "$InstallDir"
+& $nssm set DCSAgentFrpc Description "DCS Agent frp reverse tunnel"
+& $nssm set DCSAgentFrpc Start SERVICE_AUTO_START
+& $nssm set DCSAgentFrpc AppStdout "$InstallDir\logs\frpc.log"
+& $nssm set DCSAgentFrpc AppStderr "$InstallDir\logs\frpc.log"
+Write-Ok "DCSAgentFrpc service installed"
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 14. Create Task Scheduler task for DCS instance
+#     (InteractiveToken so DCS can access the user's Saved Games session)
+# ══════════════════════════════════════════════════════════════════════════════
+Write-Step "Creating Task Scheduler task for DCS instance ($ServiceName)"
+
+$currentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent()
+$sid         = $currentUser.User.Value
+$dcsArgs     = "-w $savedGamesKey"
+$dcsBinDir   = Split-Path $dcsExe -Parent
+
+$taskXml = @"
+<?xml version="1.0" encoding="UTF-16"?>
+<Task version="1.3" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <RegistrationInfo>
+    <URI>\$ServiceName</URI>
+  </RegistrationInfo>
+  <Principals>
+    <Principal id="Author">
+      <UserId>$sid</UserId>
+      <LogonType>InteractiveToken</LogonType>
+    </Principal>
+  </Principals>
+  <Settings>
+    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
+    <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <UseUnifiedSchedulingEngine>true</UseUnifiedSchedulingEngine>
+  </Settings>
+  <Triggers />
+  <Actions Context="Author">
+    <Exec>
+      <Command>$dcsExe</Command>
+      <Arguments>$dcsArgs</Arguments>
+      <WorkingDirectory>$dcsBinDir</WorkingDirectory>
+    </Exec>
+  </Actions>
+</Task>
+"@
+
+$tmpXml = [System.IO.Path]::GetTempFileName() + ".xml"
+[System.IO.File]::WriteAllText($tmpXml, $taskXml, [System.Text.Encoding]::Unicode)
+
+# Remove existing task if present
+schtasks /delete /tn $ServiceName /f 2>$null
+
+schtasks /create /tn $ServiceName /xml $tmpXml /f | Out-Null
+Remove-Item $tmpXml -ErrorAction SilentlyContinue
+Write-Ok "Task Scheduler task created: $ServiceName"
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 15. Create DCS-UpdateDCS Task Scheduler task (runs as SYSTEM)
+# ══════════════════════════════════════════════════════════════════════════════
+Write-Step "Creating DCS-UpdateDCS update task"
+
+# Copy the update script into the install directory
+$updateScript = "$InstallDir\update_DCS_auto.ps1"
+$updateScriptSrc = "$InstallDir\src\scripts\update_DCS_auto.ps1"
+if (Test-Path $updateScriptSrc) {
+    Copy-Item $updateScriptSrc $updateScript -Force
+} else {
+    Write-Warn "update_DCS_auto.ps1 not found in agent source — update task will not work."
+}
+
+$updateTaskXml = @"
+<?xml version="1.0" encoding="UTF-16"?>
+<Task version="1.3" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <RegistrationInfo>
+    <URI>\DCS-UpdateDCS</URI>
+    <Description>Stops DCS servers, runs DCS_updater.exe, restarts servers. Triggered by DCS Agent.</Description>
+  </RegistrationInfo>
+  <Principals>
+    <Principal id="Author">
+      <UserId>S-1-5-18</UserId>
+      <RunLevel>HighestAvailable</RunLevel>
+    </Principal>
+  </Principals>
+  <Settings>
+    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
+    <ExecutionTimeLimit>PT2H</ExecutionTimeLimit>
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <UseUnifiedSchedulingEngine>true</UseUnifiedSchedulingEngine>
+  </Settings>
+  <Triggers />
+  <Actions Context="Author">
+    <Exec>
+      <Command>powershell.exe</Command>
+      <Arguments>-NoProfile -ExecutionPolicy Bypass -File "$updateScript" -ConfigFile "$agentCfgPath"</Arguments>
+    </Exec>
+  </Actions>
+</Task>
+"@
+
+$tmpUpdateXml = [System.IO.Path]::GetTempFileName() + ".xml"
+[System.IO.File]::WriteAllText($tmpUpdateXml, $updateTaskXml, [System.Text.Encoding]::Unicode)
+schtasks /delete /tn "DCS-UpdateDCS" /f 2>$null
+schtasks /create /tn "DCS-UpdateDCS" /xml $tmpUpdateXml /f | Out-Null
+Remove-Item $tmpUpdateXml -ErrorAction SilentlyContinue
+Write-Ok "DCS-UpdateDCS task created (runs as SYSTEM)"
+
+# Ensure ProgramData status directory exists and is writable by SYSTEM
+New-Item -ItemType Directory -Force -Path "C:\ProgramData\DCSAgent" | Out-Null
+Write-Ok "C:\ProgramData\DCSAgent created"
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 16. Install DCS Lua status hook
+# ══════════════════════════════════════════════════════════════════════════════
+Write-Step "Installing DCS Lua status hook"
+
+$hooksDir = "$savedGamesPath\Scripts\Hooks"
+New-Item -ItemType Directory -Force -Path $hooksDir | Out-Null
+
+$hookSrc = "$InstallDir\src\scripts\dcs_agent_hook.lua"
+if (Test-Path $hookSrc) {
+    Copy-Item $hookSrc "$hooksDir\dcs_agent_hook.lua" -Force
+    Write-Ok "Hook installed to $hooksDir"
+} else {
+    Write-Warn "Hook script not found at $hookSrc — skipping. Mission/player status will not be available."
+}
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 17. Start services
+# ══════════════════════════════════════════════════════════════════════════════
+Write-Step "Starting services"
+
+Start-Service DCSAgentFrpc
+Write-Ok "DCSAgentFrpc started (tunnel connecting to $($reg.frpServerAddr):$($reg.frpServerPort))"
+
+Start-Sleep -Seconds 2
+
+Start-Service DCSAgent
+Write-Ok "DCSAgent started (listening on port 8787)"
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Done
+# ══════════════════════════════════════════════════════════════════════════════
+Write-Host ""
+Write-Host "============================================================" -ForegroundColor Green
+Write-Host "   Community host installed successfully!" -ForegroundColor Green
+Write-Host "============================================================" -ForegroundColor Green
+Write-Host ""
+Write-Host "  Host ID      : $($reg.hostId)" -ForegroundColor White
+Write-Host "  Host name    : $InstanceName"  -ForegroundColor White
+Write-Host "  frp port     : $($reg.frpRemotePort)" -ForegroundColor White
+Write-Host "  Install dir  : $InstallDir"    -ForegroundColor White
+Write-Host ""
+Write-Host "  Your DCS server is now registered and the tunnel is active." -ForegroundColor Yellow
+Write-Host "  The server admin can manage your instance from Discord." -ForegroundColor Yellow
+Write-Host ""
+Write-Host "  To start your DCS server:  /dcs start (via Discord)" -ForegroundColor Cyan
+Write-Host "  Services:  DCSAgent, DCSAgentFrpc (auto-start on Windows boot)" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "  NOTE: Restart DCS after install so the Lua hook activates." -ForegroundColor Magenta
+Write-Host "============================================================" -ForegroundColor Green

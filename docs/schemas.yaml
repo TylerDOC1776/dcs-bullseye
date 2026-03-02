@@ -1,0 +1,59 @@
+    Role:
+      type: string
+      enum: [viewer, operator, admin]
+
+    Scope:
+      type: string
+      enum:
+        # read scopes
+        - hosts:read
+        - servers:read
+        - instances:read
+        - missions:read
+        - logs:read
+        - metrics:read
+        - jobs:read
+        - events:read
+
+        # write/action scopes
+        - hosts:write
+        - servers:write
+        - instances:write
+        - config:write
+        - missions:write
+        - logs:write
+        - jobs:cancel
+        - instances:action:start
+        - instances:action:stop
+        - instances:action:restart
+        - instances:action:update
+        - instances:action:mission:load
+        - instances:action:logs:bundle
+
+    Principal:
+      type: object
+      required: [sub, role, scopes]
+      properties:
+        sub:
+          type: string
+          description: Subject id (user/service)
+          example: "user_01HXYZ"
+        role:
+          $ref: "#/components/schemas/Role"
+        scopes:
+          type: array
+          items:
+            $ref: "#/components/schemas/Scope"
+        orgId:
+          type: string
+          nullable: true
+        allowedServers:
+          type: array
+          items: { type: string }
+          nullable: true
+          description: Optional allow-list by serverId
+        allowedInstances:
+          type: array
+          items: { type: string }
+          nullable: true
+          description: Optional allow-list by instanceId

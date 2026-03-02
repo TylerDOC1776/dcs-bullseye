@@ -1,0 +1,73 @@
+  /events/stream:
+    get:
+      tags: [Events]
+      summary: Server-Sent Events stream
+      operationId: sseStream
+      description: >
+        SSE stream of events. Events are JSON payloads matching EventEnvelope.
+        Use query params to filter streams.
+      parameters:
+        - name: types
+          in: query
+          description: Comma-separated list of event types to include
+          schema: { type: string, example: "instance.started,update.progress,log.error_detected" }
+        - name: instanceId
+          in: query
+          schema: { type: string }
+        - name: hostId
+          in: query
+          schema: { type: string }
+        - name: serverId
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: SSE stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
+
+  /events/recent:
+    get:
+      tags: [Events]
+      summary: Get recent events (polling fallback)
+      operationId: listRecentEvents
+      parameters:
+        - $ref: "#/components/parameters/limit"
+        - name: since
+          in: query
+          description: ISO 8601 timestamp; return events >= since
+          schema: { type: string, format: date-time }
+        - name: types
+          in: query
+          schema: { type: string }
+        - name: instanceId
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: Recent events
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/EventEnvelope"
+
+  /events/ws:
+    get:
+      tags: [Events]
+      summary: WebSocket endpoint for events
+      operationId: wsEvents
+      description: >
+        WebSocket messages are JSON objects matching EventEnvelope.
+        Client may send a single subscribe message after connect:
+        { "op": "subscribe", "types": ["instance.started", "log.error_detected"], "instanceId": "inst_..." }
+      responses:
+        "101":
+          description: Switching Protocols (WebSocket)

@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+requests
+httpx
+discord.py
+psutil
+pywin32>=305; platform_system == "Windows"
+python-dotenv
+pytest
+PySide6

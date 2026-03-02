@@ -1,0 +1,180 @@
+"""
+EventsCog — background SSE subscriber.
+
+Connects to the orchestrator's /api/v1/events/stream endpoint and posts
+notifications to Discord when significant events occur:
+
+  instance.status_changed  → posts when an instance goes up or down
+  job.failed               → posts when a job fails (useful for externally
+                             triggered actions not initiated via bot commands)
+
+The connection reconnects automatically with exponential backoff on failure.
+Notifications go to EVENTS_CHANNEL_ID if set, otherwise BOT_CHANNEL_ID.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import json
+import logging
+from typing import TYPE_CHECKING
+
+import discord
+import httpx
+from discord.ext import commands
+
+if TYPE_CHECKING:
+    from config import BotConfig
+
+log = logging.getLogger(__name__)
+
+_SUBSCRIBE_TYPES = "instance.status_changed,job.failed"
+_MIN_BACKOFF = 1.0
+_MAX_BACKOFF = 60.0
+
+_STATUS_COLOURS: dict[str, int] = {
+    "running":  0x2ECC71,
+    "stopped":  0xE74C3C,
+    "error":    0xE74C3C,
+    "starting": 0xE67E22,
+    "stopping": 0xE67E22,
+}
+_COLOUR_UNKNOWN = 0x95A5A6
+
+
+def _status_colour(status: str) -> int:
+    return _STATUS_COLOURS.get(status.lower(), _COLOUR_UNKNOWN)
+
+
+class EventsCog(commands.Cog):
+    def __init__(self, config: BotConfig) -> None:
+        self.config = config
+        self._task: asyncio.Task | None = None
+
+    async def cog_load(self) -> None:
+        self._task = asyncio.create_task(self._sse_loop())
+
+    async def cog_unload(self) -> None:
+        if self._task:
+            self._task.cancel()
+            try:
+                await self._task
+            except asyncio.CancelledError:
+                pass
+
+    # ------------------------------------------------------------------ #
+    # Channel resolution                                                   #
+    # ------------------------------------------------------------------ #
+
+    def _notify_channel(self) -> discord.TextChannel | None:
+        channel_id = self.config.events_channel_id or self.config.bot_channel_id
+        if not channel_id:
+            return None
+        channel = self.bot.get_channel(channel_id)  # type: ignore[attr-defined]
+        if isinstance(channel, discord.TextChannel):
+            return channel
+        return None
+
+    # ------------------------------------------------------------------ #
+    # SSE loop with reconnect                                              #
+    # ------------------------------------------------------------------ #
+
+    async def _sse_loop(self) -> None:
+        backoff = _MIN_BACKOFF
+        while True:
+            try:
+                await self._connect_and_stream()
+                backoff = _MIN_BACKOFF  # clean disconnect — reset backoff
+            except asyncio.CancelledError:
+                return
+            except Exception as exc:
+                log.warning("SSE stream lost (%s), reconnecting in %.0fs", exc, backoff)
+                await asyncio.sleep(backoff)
+                backoff = min(backoff * 2, _MAX_BACKOFF)
+
+    async def _connect_and_stream(self) -> None:
+        url = (
+            f"{self.config.orchestrator_url}/api/v1/events/stream"
+            f"?types={_SUBSCRIBE_TYPES}"
+        )
+        headers: dict[str, str] = {}
+        if self.config.orchestrator_api_key:
+            headers["X-API-Key"] = self.config.orchestrator_api_key
+
+        log.info("Connecting to SSE stream: %s", url)
+        async with httpx.AsyncClient(timeout=None) as http:
+            async with http.stream("GET", url, headers=headers) as resp:
+                if not resp.is_success:
+                    raise RuntimeError(f"SSE stream returned HTTP {resp.status_code}")
+                log.info("SSE stream connected")
+                buffer: dict[str, str] = {}
+                async for line in resp.aiter_lines():
+                    if line.startswith("event:"):
+                        buffer["event"] = line[6:].strip()
+                    elif line.startswith("data:"):
+                        buffer["data"] = line[5:].strip()
+                    elif line.startswith("id:"):
+                        buffer["id"] = line[3:].strip()
+                    elif line == "" and "data" in buffer:
+                        await self._handle_event(buffer)
+                        buffer = {}
+                    # comment lines (": ...") are heartbeats — ignore
+
+    # ------------------------------------------------------------------ #
+    # Event handler                                                        #
+    # ------------------------------------------------------------------ #
+
+    async def _handle_event(self, raw: dict[str, str]) -> None:
+        event_type = raw.get("event", "")
+        try:
+            data = json.loads(raw.get("data", "{}"))
+        except json.JSONDecodeError:
+            return
+
+        channel = self._notify_channel()
+        if channel is None:
+            return
+
+        try:
+            if event_type == "instance.status_changed":
+                await self._on_status_changed(channel, data)
+            elif event_type == "job.failed":
+                await self._on_job_failed(channel, data)
+        except Exception as exc:
+            log.warning("Failed to post event notification: %s", exc)
+
+    async def _on_status_changed(
+        self, channel: discord.TextChannel, data: dict
+    ) -> None:
+        instance_name = data.get("name") or data.get("instanceId", "Unknown")
+        status = data.get("status", "unknown")
+        prev = data.get("previousStatus", "?")
+
+        # Only notify for meaningful transitions (avoid unknown→unknown noise)
+        if status == prev:
+            return
+
+        embed = discord.Embed(
+            title="Instance status changed",
+            description=f"**{instance_name}**: `{prev}` → `{status}`",
+            colour=_status_colour(status),
+        )
+        await channel.send(embed=embed)
+
+    async def _on_job_failed(
+        self, channel: discord.TextChannel, data: dict
+    ) -> None:
+        instance_id = data.get("instanceId", "?")
+        action = data.get("action", "?")
+        error_msg = ""
+        if err := data.get("error"):
+            error_msg = err.get("message", "") if isinstance(err, dict) else str(err)
+
+        embed = discord.Embed(
+            title="Job failed",
+            description=f"`{action}` on `{instance_id}` failed",
+            colour=0xE74C3C,
+        )
+        if error_msg:
+            embed.add_field(name="Error", value=error_msg, inline=False)
+        await channel.send(embed=embed)

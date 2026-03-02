@@ -1,0 +1,8 @@
+{
+  "_comment": "Orchestrator config — set DCS_ORCHESTRATOR_CONFIG to point at this.",
+  "api_key": "change-me",
+  "host": "0.0.0.0",
+  "port": 8888,
+  "db_path": "C:\\ProgramData\\DCSOrchestrator\\orchestrator.db",
+  "log_level": "info"
+}

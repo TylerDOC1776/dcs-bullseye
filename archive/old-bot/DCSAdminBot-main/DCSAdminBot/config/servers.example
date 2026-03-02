@@ -1,0 +1,9 @@
+{
+  "instances": {
+    "SERVER_1_COMMAND_NAME": {
+      "name": "SERVER_1_WINDOW_NAME",
+      "exe": "C:\\\\Program Files\\\\Eagle Dynamics\\\\DCS World Server\\\\bin\\\\DCS_server.exe",
+      "log": "C:/Users/YOUR_USERNAME/Saved Games/SERVER_FOLDER_NAME/Logs/dcs.log"
+    }
+  }
+}

@@ -1,0 +1,62 @@
+{
+  "_comment": "Copy this file, fill in real paths, and set DCS_AGENT_CONFIG to point at it.",
+  "_comment_nssm_path": "Set nssm_path to the full path of nssm.exe if it is not on PATH.",
+  "nssm_path": "nssm",
+  "log_dir": "C:\\ProgramData\\DCSAgent\\logs",
+  "_comment_api": "REST API settings — agent listens on host:port, protected by X-API-Key header.",
+  "api_key": "change-me",
+  "host": "0.0.0.0",
+  "port": 8787,
+  "instances": [
+    {
+      "_comment": "Instance 1 — primary server",
+      "name": "Server 1",
+      "service_name": "DCS-server1",
+      "exe_path": "C:\\Program Files\\Eagle Dynamics\\DCS World OpenBeta Server\\bin\\DCS_server.exe",
+      "_comment_saved_games_key": "Matches the folder name under %USERPROFILE%\\Saved Games\\",
+      "saved_games_key": "DCS.server1",
+      "log_path": "C:\\Users\\YourUser\\Saved Games\\DCS.server1\\Logs\\dcs.log",
+      "missions_dir": "C:\\Users\\YourUser\\Saved Games\\DCS.server1\\Missions",
+      "auto_start": true,
+      "ports": {
+        "_comment": "Document your port assignments here for reference — not enforced by the agent.",
+        "game": 10308,
+        "webgui": 8088,
+        "srs": 5002,
+        "tacview": 42674
+      }
+    },
+    {
+      "_comment": "Instance 2 — secondary server (ports staggered +1)",
+      "name": "Server 2",
+      "service_name": "DCS-server2",
+      "exe_path": "C:\\Program Files\\Eagle Dynamics\\DCS World OpenBeta Server\\bin\\DCS_server.exe",
+      "saved_games_key": "DCS.server2",
+      "log_path": "C:\\Users\\YourUser\\Saved Games\\DCS.server2\\Logs\\dcs.log",
+      "missions_dir": "C:\\Users\\YourUser\\Saved Games\\DCS.server2\\Missions",
+      "auto_start": true,
+      "ports": {
+        "game": 10309,
+        "webgui": 8089,
+        "srs": 5003,
+        "tacview": 42675
+      }
+    },
+    {
+      "_comment": "Instance 3 — tertiary server (ports staggered +2)",
+      "name": "Server 3",
+      "service_name": "DCS-server3",
+      "exe_path": "C:\\Program Files\\Eagle Dynamics\\DCS World OpenBeta Server\\bin\\DCS_server.exe",
+      "saved_games_key": "DCS.server3",
+      "log_path": "C:\\Users\\YourUser\\Saved Games\\DCS.server3\\Logs\\dcs.log",
+      "missions_dir": "C:\\Users\\YourUser\\Saved Games\\DCS.server3\\Missions",
+      "auto_start": true,
+      "ports": {
+        "game": 10310,
+        "webgui": 8090,
+        "srs": 5004,
+        "tacview": 42676
+      }
+    }
+  ]
+}
