@@ -17,6 +17,7 @@ import hmac
 import secrets
 import time
 from typing import Any
+from urllib.parse import urlparse
 
 import httpx
 
@@ -44,18 +45,30 @@ class AgentClient:
         self._client = httpx.AsyncClient(headers=headers)
         return self
 
+    def _full_path(self, path: str) -> str:
+        """Return the full URL path (base path + relative path) for signing.
+
+        e.g. base_url="http://localhost:8800/agent/v1", path="/instances/DCS-X/actions/start"
+        → "/agent/v1/instances/DCS-X/actions/start"
+
+        This must match request.url.path as seen by the agent's auth dependency.
+        """
+        base_path = urlparse(self._base_url).path.rstrip("/")
+        return f"{base_path}/{path.lstrip('/')}"
+
     def _sign_headers(self, method: str, path: str) -> dict[str, str]:
         """Return X-Timestamp / X-Nonce / X-Signature headers for a request.
 
         Skipped (returns empty dict) when api_key is empty (dev mode).
-        The signature covers method + path + timestamp + nonce, which prevents
+        The signature covers method + full_path + timestamp + nonce, which prevents
         replaying captured requests even if the transport is not encrypted.
         """
         if not self._api_key:
             return {}
         timestamp = str(int(time.time()))
         nonce = secrets.token_hex(16)
-        msg = f"{method.upper()}\n{path}\n{timestamp}\n{nonce}"
+        full_path = self._full_path(path)
+        msg = f"{method.upper()}\n{full_path}\n{timestamp}\n{nonce}"
         sig = hmac.new(self._api_key.encode(), msg.encode(), hashlib.sha256).hexdigest()
         return {
             "X-Timestamp": timestamp,
