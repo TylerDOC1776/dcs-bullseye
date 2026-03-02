@@ -45,4 +45,4 @@ pip install -r requirements.txt
 python -m hub.server
 ```
 
-See `CLAUDE.md` for full details on all packages and conventions.
+See the `docs/` folder for full architecture and API details.

@@ -40,7 +40,7 @@ env/
 *.db-shm
 *.db-wal
 
-# Claude Code local settings
+# Local dev tool settings
 .claude/
 
 # Log files
