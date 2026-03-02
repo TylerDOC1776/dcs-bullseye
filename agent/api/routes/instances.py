@@ -135,6 +135,8 @@ async def upload_mission(instanceId: str, request: Request) -> dict:
         dest = safe_join(missions_dir, filename)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+    if dest.exists():
+        raise HTTPException(status_code=409, detail=f"A file named {filename!r} already exists")
     dest.write_bytes(data)
     return {"path": str(dest), "filename": filename, "size": len(data)}
 
@@ -240,6 +242,8 @@ async def upload_active_mission(request: Request) -> dict:
     loop = asyncio.get_running_loop()
     try:
         result = await loop.run_in_executor(None, ctrl.upload_active_mission, filename, data)
+    except FileExistsError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     return result

@@ -849,10 +849,14 @@ class DcsCog(commands.Cog):
         # ---------------------------------------------------------------- #
 
         @self.dcs.command(name="upload", description="Upload a .miz file to the Active Missions folder")
-        @app_commands.describe(file="The .miz file to upload")
+        @app_commands.describe(
+            file="The .miz file to upload",
+            rename="Auto-rename if a file with that name already exists (e.g. mission_2.miz)",
+        )
         async def cmd_upload(
             interaction: discord.Interaction,
             file: discord.Attachment,
+            rename: bool = False,
         ) -> None:
             if not await _check_channel(interaction):
                 return
@@ -870,8 +874,40 @@ class DcsCog(commands.Cog):
                     await interaction.followup.send("No hosts registered.", ephemeral=True)
                     return
                 data = await file.read()
-                result = await client.upload_active_mission(hosts[0]["id"], file.filename, data)
-                embed = discord.Embed(title=f"Uploaded: {file.filename}", colour=0x2ECC71)
+                upload_name = file.filename
+                renamed = False
+                try:
+                    result = await client.upload_active_mission(hosts[0]["id"], upload_name, data)
+                except OrchestratorError as exc:
+                    if exc.status_code == 409 and rename:
+                        # Auto-rename: try filename_2.miz, filename_3.miz, ...
+                        stem = file.filename[:-4]  # strip .miz
+                        for n in range(2, 11):
+                            upload_name = f"{stem}_{n}.miz"
+                            try:
+                                result = await client.upload_active_mission(hosts[0]["id"], upload_name, data)
+                                renamed = True
+                                break
+                            except OrchestratorError as inner:
+                                if inner.status_code != 409:
+                                    raise
+                        else:
+                            await interaction.followup.send(
+                                "Could not find a free filename after 10 attempts.", ephemeral=True
+                            )
+                            return
+                    elif exc.status_code == 409:
+                        await interaction.followup.send(
+                            f"`{file.filename}` already exists in Active Missions.\n"
+                            f"Use `/dcs upload rename:True` to upload with an auto-generated name instead.",
+                            ephemeral=True,
+                        )
+                        return
+                    else:
+                        raise
+                embed = discord.Embed(title=f"Uploaded: {upload_name}", colour=0x2ECC71)
+                if renamed:
+                    embed.description = f"⚠️ Renamed from `{file.filename}` (original already exists)"
                 embed.add_field(name="Size", value=f"{len(data):,} bytes", inline=True)
                 if saved_as := result.get("path"):
                     embed.add_field(name="Saved as", value=f"`{saved_as}`", inline=False)

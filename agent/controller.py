@@ -644,6 +644,8 @@ class DcsController:
         dest_dir = Path(active_dir)
         dest_dir.mkdir(parents=True, exist_ok=True)
         dest = dest_dir / filename
+        if dest.exists():
+            raise FileExistsError(f"A file named {filename!r} already exists in Active Missions")
         dest.write_bytes(data)
         return {"path": str(dest), "filename": filename, "size": len(data)}
 
