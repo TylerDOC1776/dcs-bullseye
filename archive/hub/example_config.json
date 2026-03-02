@@ -1,8 +1,0 @@
-{
-  "admin_token": "ADMIN_SECRET",
-  "data_dir": "var",
-  "nodes": {
-    "southern-01": { "token": "NODE_TOKEN_SOUTHERN" },
-    "bravo-02": { "token": "NODE_TOKEN_BRAVO" }
-  }
-}
