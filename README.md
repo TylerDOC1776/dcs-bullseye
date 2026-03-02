@@ -6,10 +6,9 @@ DCS World server management system — monorepo workspace.
 
 | Directory | Status | Description |
 |-----------|--------|-------------|
-| `orchestrator/` | Scaffold | FastAPI orchestrator (command router, RBAC, jobs, SSE/WebSocket) |
-| `agent/` | Scaffold | FastAPI agent (Windows node: process control, logs, missions) |
-| `discord-bot/` | Scaffold | DCS management Discord bot |
-| `music-bot/` | **Active** | Working Discord music bot (Python + discord.py) |
+| `orchestrator/` | Active | FastAPI orchestrator (command router, auth, jobs, audit logging) |
+| `agent/` | Active | FastAPI agent (Windows node: process control, logs, missions) |
+| `discord-bot/` | Active | DCS management Discord bot |
 | `archive/` | Archived | Python prototype (hub-and-spoke) + legacy DCSAdminBot |
 | `docs/` | Reference | API specs, architecture docs, design notes |
 | `configs/` | — | Config file examples |
@@ -19,16 +18,24 @@ DCS World server management system — monorepo workspace.
 
 - `docs/OpenAPI.yaml` — Full REST API contract (source of truth)
 - `docs/architecture.md` — System architecture overview
-- `docs/notes.md` — FastAPI/NSSM notes and target monorepo structure
+- `docs/network-overview.md` — Tunnel and connectivity diagram
 
 ## Quick Reference
 
-### Music Bot (active)
+### Orchestrator
 ```bash
-cd music-bot
+cd orchestrator
 pip install -r requirements.txt
-# configure .env from .env.example
-python bot.py
+export DCS_ORCHESTRATOR_CONFIG=../configs/orchestrator.example.json
+python -m orchestrator serve
+```
+
+### Agent (Windows)
+```bash
+cd agent
+pip install -r requirements.txt
+# configure C:\ProgramData\DCSAgent\config.json
+python -m agent serve
 ```
 
 ### Archived prototype (reference only)
