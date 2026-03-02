@@ -68,3 +68,4 @@ npm-debug.log*
 .coverage
 htmlcov/
 music-bot/
+CLAUDE.md
