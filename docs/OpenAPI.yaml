@@ -1,0 +1,1518 @@
+openapi: 3.0.3
+info:
+  title: DCS Server Management API
+  version: 1.0.0
+  description: >
+    Standard REST API for managing DCS Dedicated Server hosting.
+    Designed for an Orchestrator (public edge) + Host Agents (internal nodes).
+    Long-running actions are modeled as Jobs. Real-time notifications via SSE/WebSocket.
+
+servers:
+  - url: https://orchestrator.example.com/api/v1
+    description: Orchestrator API (public edge)
+  - url: http://agent.local:8787/agent/v1
+    description: Agent API (internal node)
+
+tags:
+  - name: Auth
+  - name: Hosts
+  - name: Servers
+  - name: Instances
+  - name: Missions
+  - name: Logs
+  - name: Config
+  - name: Metrics
+  - name: Jobs
+  - name: Events
+  - name: Agent
+
+security:
+  - bearerAuth: []
+  - apiKeyAuth: []
+
+paths:
+  /auth/token:
+    post:
+      tags: [Auth]
+      summary: Issue an access token (service-to-service or CLI)
+      operationId: authToken
+      security:
+        - apiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [clientId, clientSecret]
+              properties:
+                clientId: { type: string }
+                clientSecret: { type: string }
+                audience: { type: string, default: "orchestrator" }
+      responses:
+        "200":
+          description: Token issued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthTokenResponse"
+        "401":
+          $ref: "#/components/responses/Problem"
+
+  /hosts:
+    get:
+      tags: [Hosts]
+      summary: List registered hosts
+      operationId: listHosts
+      parameters:
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+        - name: q
+          in: query
+          schema: { type: string }
+        - name: tag
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: Host list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PagedHosts"
+        "401":
+          $ref: "#/components/responses/Problem"
+
+    post:
+      tags: [Hosts]
+      summary: Register a host (agent node)
+      operationId: createHost
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/HostCreate"
+      responses:
+        "201":
+          description: Host created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Host"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+
+  /hosts/{hostId}:
+    get:
+      tags: [Hosts]
+      summary: Get host details
+      operationId: getHost
+      parameters:
+        - $ref: "#/components/parameters/hostId"
+      responses:
+        "200":
+          description: Host
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Host"
+        "404":
+          $ref: "#/components/responses/Problem"
+
+    patch:
+      tags: [Hosts]
+      summary: Update host metadata
+      operationId: updateHost
+      parameters:
+        - $ref: "#/components/parameters/hostId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/HostPatch"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Host"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+
+  /hosts/{hostId}/health:
+    get:
+      tags: [Hosts, Metrics]
+      summary: Host health status
+      operationId: getHostHealth
+      parameters:
+        - $ref: "#/components/parameters/hostId"
+      responses:
+        "200":
+          description: Health
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Health"
+        "404":
+          $ref: "#/components/responses/Problem"
+
+  /hosts/{hostId}/metrics:
+    get:
+      tags: [Hosts, Metrics]
+      summary: Host metrics snapshot
+      operationId: getHostMetrics
+      parameters:
+        - $ref: "#/components/parameters/hostId"
+      responses:
+        "200":
+          description: Metrics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Metrics"
+        "404":
+          $ref: "#/components/responses/Problem"
+
+  /servers:
+    get:
+      tags: [Servers]
+      summary: List logical servers
+      operationId: listServers
+      parameters:
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+        - name: tag
+          in: query
+          schema: { type: string }
+        - name: q
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: Server list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PagedServers"
+
+    post:
+      tags: [Servers]
+      summary: Create a logical server
+      operationId: createServer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ServerCreate"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Server"
+
+  /servers/{serverId}:
+    get:
+      tags: [Servers]
+      summary: Get logical server
+      operationId: getServer
+      parameters:
+        - $ref: "#/components/parameters/serverId"
+      responses:
+        "200":
+          description: Server
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Server"
+        "404":
+          $ref: "#/components/responses/Problem"
+
+    patch:
+      tags: [Servers]
+      summary: Update logical server
+      operationId: updateServer
+      parameters:
+        - $ref: "#/components/parameters/serverId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ServerPatch"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Server"
+
+    delete:
+      tags: [Servers]
+      summary: Delete logical server
+      operationId: deleteServer
+      parameters:
+        - $ref: "#/components/parameters/serverId"
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          $ref: "#/components/responses/Problem"
+
+  /instances:
+    get:
+      tags: [Instances]
+      summary: List instances
+      operationId: listInstances
+      parameters:
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+        - name: serverId
+          in: query
+          schema: { type: string }
+        - name: hostId
+          in: query
+          schema: { type: string }
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/InstanceStatus"
+      responses:
+        "200":
+          description: Instance list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PagedInstances"
+
+    post:
+      tags: [Instances]
+      summary: Create an instance definition
+      operationId: createInstance
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InstanceCreate"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Instance"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+
+  /instances/{instanceId}:
+    get:
+      tags: [Instances]
+      summary: Get instance definition + latest state
+      operationId: getInstance
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+      responses:
+        "200":
+          description: Instance
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Instance"
+        "404":
+          $ref: "#/components/responses/Problem"
+
+    patch:
+      tags: [Instances]
+      summary: Patch instance definition
+      operationId: updateInstance
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InstancePatch"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Instance"
+
+    delete:
+      tags: [Instances]
+      summary: Delete instance definition
+      operationId: deleteInstance
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          $ref: "#/components/responses/Problem"
+
+  /instances/{instanceId}/status:
+    get:
+      tags: [Instances]
+      summary: Get runtime status (running/stopped, PID, uptime)
+      operationId: getInstanceStatus
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+      responses:
+        "200":
+          description: Status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InstanceRuntime"
+        "404":
+          $ref: "#/components/responses/Problem"
+
+  /instances/{instanceId}/health:
+    get:
+      tags: [Instances, Metrics]
+      summary: Instance health
+      operationId: getInstanceHealth
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+      responses:
+        "200":
+          description: Health
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Health"
+        "404":
+          $ref: "#/components/responses/Problem"
+
+  /instances/{instanceId}/metrics:
+    get:
+      tags: [Instances, Metrics]
+      summary: Instance metrics snapshot
+      operationId: getInstanceMetrics
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+      responses:
+        "200":
+          description: Metrics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Metrics"
+        "404":
+          $ref: "#/components/responses/Problem"
+
+  /instances/{instanceId}/version:
+    get:
+      tags: [Instances]
+      summary: Get installed version and update info (if available)
+      operationId: getInstanceVersion
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+      responses:
+        "200":
+          description: Version info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VersionInfo"
+        "404":
+          $ref: "#/components/responses/Problem"
+
+  /instances/{instanceId}/actions/start:
+    post:
+      tags: [Instances, Jobs]
+      summary: Start instance (async)
+      operationId: startInstance
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+        - $ref: "#/components/parameters/idempotencyKey"
+      responses:
+        "202":
+          description: Job created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobAccepted"
+        "404":
+          $ref: "#/components/responses/Problem"
+
+  /instances/{instanceId}/actions/stop:
+    post:
+      tags: [Instances, Jobs]
+      summary: Stop instance (async)
+      operationId: stopInstance
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+        - $ref: "#/components/parameters/idempotencyKey"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                force:
+                  type: boolean
+                  default: false
+                timeoutSeconds:
+                  type: integer
+                  minimum: 1
+                  maximum: 600
+                  default: 60
+      responses:
+        "202":
+          description: Job created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobAccepted"
+        "404":
+          $ref: "#/components/responses/Problem"
+
+  /instances/{instanceId}/actions/restart:
+    post:
+      tags: [Instances, Jobs]
+      summary: Restart instance (async)
+      operationId: restartInstance
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+        - $ref: "#/components/parameters/idempotencyKey"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                force:
+                  type: boolean
+                  default: false
+                timeoutSeconds:
+                  type: integer
+                  minimum: 1
+                  maximum: 600
+                  default: 60
+      responses:
+        "202":
+          description: Job created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobAccepted"
+        "404":
+          $ref: "#/components/responses/Problem"
+
+  /instances/{instanceId}/actions/update:
+    post:
+      tags: [Instances, Jobs]
+      summary: Run update (async)
+      operationId: updateInstance
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+        - $ref: "#/components/parameters/idempotencyKey"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                channel:
+                  type: string
+                  description: Optional update channel or branch tag (if supported)
+                stopBeforeUpdate:
+                  type: boolean
+                  default: true
+                startAfterUpdate:
+                  type: boolean
+                  default: true
+      responses:
+        "202":
+          description: Job created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobAccepted"
+        "404":
+          $ref: "#/components/responses/Problem"
+
+  /instances/{instanceId}/actions/mission/load:
+    post:
+      tags: [Instances, Missions, Jobs]
+      summary: Load mission by path or missionId (async)
+      operationId: loadMission
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+        - $ref: "#/components/parameters/idempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MissionLoadRequest"
+      responses:
+        "202":
+          description: Job created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobAccepted"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+
+  /instances/{instanceId}/missions:
+    get:
+      tags: [Instances, Missions]
+      summary: List missions available to instance
+      operationId: listMissions
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+      responses:
+        "200":
+          description: Missions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/Mission" }
+
+  /instances/{instanceId}/mission/current:
+    get:
+      tags: [Instances, Missions]
+      summary: Get currently loaded mission (best-effort)
+      operationId: getCurrentMission
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+      responses:
+        "200":
+          description: Current mission
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MissionCurrent"
+
+  /instances/{instanceId}/logs/tail:
+    get:
+      tags: [Instances, Logs]
+      summary: Tail logs
+      operationId: tailLogs
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+        - name: lines
+          in: query
+          schema: { type: integer, minimum: 10, maximum: 2000, default: 200 }
+        - name: level
+          in: query
+          schema:
+            type: string
+            enum: [ALL, INFO, WARN, ERROR]
+            default: ALL
+      responses:
+        "200":
+          description: Log tail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LogTail"
+
+  /instances/{instanceId}/logs/errors:
+    get:
+      tags: [Instances, Logs]
+      summary: Extract errors/warnings since timestamp
+      operationId: getLogErrors
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+        - name: since
+          in: query
+          description: ISO 8601 timestamp
+          schema: { type: string, format: date-time }
+        - name: level
+          in: query
+          schema:
+            type: string
+            enum: [WARN, ERROR]
+            default: ERROR
+      responses:
+        "200":
+          description: Extracted log events
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LogEvents"
+
+  /instances/{instanceId}/actions/logs/bundle:
+    post:
+      tags: [Instances, Logs, Jobs]
+      summary: Create downloadable log bundle (async)
+      operationId: bundleLogs
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+        - $ref: "#/components/parameters/idempotencyKey"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                includeTracks:
+                  type: boolean
+                  default: false
+                includeMiz:
+                  type: boolean
+                  default: false
+                days:
+                  type: integer
+                  minimum: 1
+                  maximum: 30
+                  default: 3
+      responses:
+        "202":
+          description: Job created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobAccepted"
+
+  /instances/{instanceId}/config:
+    get:
+      tags: [Instances, Config]
+      summary: Get instance configuration (safe subset)
+      operationId: getInstanceConfig
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+      responses:
+        "200":
+          description: Config
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InstanceConfig"
+
+    patch:
+      tags: [Instances, Config]
+      summary: Patch instance configuration (safe subset)
+      operationId: patchInstanceConfig
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InstanceConfigPatch"
+      responses:
+        "200":
+          description: Updated config
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InstanceConfig"
+        "400":
+          $ref: "#/components/responses/Problem"
+
+  /instances/{instanceId}/config/validate:
+    post:
+      tags: [Instances, Config]
+      summary: Validate configuration without applying
+      operationId: validateInstanceConfig
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InstanceConfigPatch"
+      responses:
+        "200":
+          description: Validation result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationResult"
+
+  /jobs:
+    get:
+      tags: [Jobs]
+      summary: List jobs
+      operationId: listJobs
+      parameters:
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+        - name: instanceId
+          in: query
+          schema: { type: string }
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/JobStatus"
+      responses:
+        "200":
+          description: Jobs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PagedJobs"
+
+  /jobs/{jobId}:
+    get:
+      tags: [Jobs]
+      summary: Get job status
+      operationId: getJob
+      parameters:
+        - $ref: "#/components/parameters/jobId"
+      responses:
+        "200":
+          description: Job
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Job"
+        "404":
+          $ref: "#/components/responses/Problem"
+
+  /jobs/{jobId}/logs:
+    get:
+      tags: [Jobs]
+      summary: Get job logs
+      operationId: getJobLogs
+      parameters:
+        - $ref: "#/components/parameters/jobId"
+        - name: lines
+          in: query
+          schema: { type: integer, minimum: 10, maximum: 5000, default: 500 }
+      responses:
+        "200":
+          description: Job logs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobLogs"
+
+  /jobs/{jobId}/cancel:
+    post:
+      tags: [Jobs]
+      summary: Cancel job (best-effort)
+      operationId: cancelJob
+      parameters:
+        - $ref: "#/components/parameters/jobId"
+        - $ref: "#/components/parameters/idempotencyKey"
+      responses:
+        "202":
+          description: Cancel requested
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobAccepted"
+        "404":
+          $ref: "#/components/responses/Problem"
+
+  /events/stream:
+    get:
+      tags: [Events]
+      summary: Server-Sent Events stream (recommended for dashboards/discord bridge)
+      operationId: sseStream
+      description: >
+        SSE stream of events: instance.started/stopped, update.progress, mission.loaded, log.error_detected, etc.
+        Response is text/event-stream.
+      responses:
+        "200":
+          description: SSE stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
+
+  /events/ws:
+    get:
+      tags: [Events]
+      summary: WebSocket endpoint for events (optional alternative to SSE)
+      operationId: wsEvents
+      responses:
+        "101":
+          description: Switching Protocols (WebSocket)
+
+  # -----------------------
+  # Agent API (internal)
+  # -----------------------
+  /health:
+    get:
+      tags: [Agent]
+      summary: Agent health
+      operationId: agentHealth
+      servers:
+        - url: http://agent.local:8787/agent/v1
+      responses:
+        "200":
+          description: Health
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Health"
+
+  /capabilities:
+    get:
+      tags: [Agent]
+      summary: Agent capabilities (OS, NSSM/systemd, supported actions)
+      operationId: agentCapabilities
+      servers:
+        - url: http://agent.local:8787/agent/v1
+      responses:
+        "200":
+          description: Capabilities
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentCapabilities"
+
+  /instances:
+    get:
+      tags: [Agent]
+      summary: List local instance definitions on this host
+      operationId: agentListInstances
+      servers:
+        - url: http://agent.local:8787/agent/v1
+      responses:
+        "200":
+          description: Instances
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/Instance" }
+
+  /instances/{instanceId}/status:
+    get:
+      tags: [Agent]
+      summary: Local runtime status
+      operationId: agentGetInstanceStatus
+      servers:
+        - url: http://agent.local:8787/agent/v1
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+      responses:
+        "200":
+          description: Status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InstanceRuntime"
+
+  /instances/{instanceId}/actions/{action}:
+    post:
+      tags: [Agent, Jobs]
+      summary: Execute a local action (async)
+      operationId: agentAction
+      servers:
+        - url: http://agent.local:8787/agent/v1
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+        - name: action
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [start, stop, restart, update, mission_load, logs_bundle]
+        - $ref: "#/components/parameters/idempotencyKey"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "202":
+          description: Job created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobAccepted"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+
+  /jobs/{jobId}:
+    get:
+      tags: [Agent, Jobs]
+      summary: Get local job status
+      operationId: agentGetJob
+      servers:
+        - url: http://agent.local:8787/agent/v1
+      parameters:
+        - $ref: "#/components/parameters/jobId"
+      responses:
+        "200":
+          description: Job
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Job"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+
+  parameters:
+    limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 50
+    cursor:
+      name: cursor
+      in: query
+      schema:
+        type: string
+    idempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      schema:
+        type: string
+      description: Optional idempotency key to avoid duplicate actions.
+    hostId:
+      name: hostId
+      in: path
+      required: true
+      schema: { type: string }
+    serverId:
+      name: serverId
+      in: path
+      required: true
+      schema: { type: string }
+    instanceId:
+      name: instanceId
+      in: path
+      required: true
+      schema: { type: string }
+    jobId:
+      name: jobId
+      in: path
+      required: true
+      schema: { type: string }
+
+  responses:
+    Problem:
+      description: Error response
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+
+  schemas:
+    AuthTokenResponse:
+      type: object
+      required: [accessToken, tokenType, expiresIn]
+      properties:
+        accessToken: { type: string }
+        tokenType: { type: string, example: "Bearer" }
+        expiresIn: { type: integer, example: 3600 }
+
+    Problem:
+      type: object
+      required: [type, title, status]
+      properties:
+        type: { type: string, example: "https://errors.example.com/instance-not-found" }
+        title: { type: string, example: "Instance not found" }
+        status: { type: integer, example: 404 }
+        detail: { type: string }
+        instance: { type: string, description: "Request correlation id / trace id" }
+
+    Health:
+      type: object
+      required: [status, checkedAt]
+      properties:
+        status:
+          type: string
+          enum: [ok, degraded, down]
+        checkedAt:
+          type: string
+          format: date-time
+        notes:
+          type: array
+          items: { type: string }
+
+    Metrics:
+      type: object
+      properties:
+        capturedAt: { type: string, format: date-time }
+        cpu:
+          type: object
+          properties:
+            percent: { type: number, format: float }
+            load1: { type: number, format: float, nullable: true }
+        memory:
+          type: object
+          properties:
+            totalBytes: { type: integer, format: int64 }
+            usedBytes: { type: integer, format: int64 }
+            percent: { type: number, format: float }
+        disk:
+          type: array
+          items:
+            type: object
+            properties:
+              mount: { type: string }
+              totalBytes: { type: integer, format: int64 }
+              usedBytes: { type: integer, format: int64 }
+              percent: { type: number, format: float }
+        network:
+          type: object
+          properties:
+            rxBytesPerSec: { type: integer, format: int64, nullable: true }
+            txBytesPerSec: { type: integer, format: int64, nullable: true }
+
+    HostCreate:
+      type: object
+      required: [name, agentUrl]
+      properties:
+        name: { type: string, example: "Win11-Host-1" }
+        agentUrl: { type: string, example: "http://100.64.0.10:8787/agent/v1" }
+        tags:
+          type: array
+          items: { type: string }
+        notes: { type: string }
+
+    HostPatch:
+      type: object
+      properties:
+        name: { type: string }
+        tags:
+          type: array
+          items: { type: string }
+        notes: { type: string }
+        isEnabled: { type: boolean }
+
+    Host:
+      type: object
+      required: [id, name, agentUrl, createdAt, isEnabled]
+      properties:
+        id: { type: string, example: "host_01HXYZ" }
+        name: { type: string }
+        agentUrl: { type: string }
+        tags:
+          type: array
+          items: { type: string }
+        notes: { type: string }
+        isEnabled: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        lastSeenAt: { type: string, format: date-time, nullable: true }
+
+    PagedHosts:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Host" }
+        nextCursor: { type: string, nullable: true }
+
+    ServerCreate:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, example: "Goonfront Caucasus" }
+        description: { type: string }
+        tags:
+          type: array
+          items: { type: string }
+
+    ServerPatch:
+      type: object
+      properties:
+        name: { type: string }
+        description: { type: string }
+        tags:
+          type: array
+          items: { type: string }
+
+    Server:
+      type: object
+      required: [id, name, createdAt]
+      properties:
+        id: { type: string, example: "srv_01HXYZ" }
+        name: { type: string }
+        description: { type: string, nullable: true }
+        tags:
+          type: array
+          items: { type: string }
+        createdAt: { type: string, format: date-time }
+
+    PagedServers:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Server" }
+        nextCursor: { type: string, nullable: true }
+
+    InstanceStatus:
+      type: string
+      enum: [unknown, stopped, starting, running, stopping, updating, error]
+
+    InstanceCreate:
+      type: object
+      required: [serverId, hostId, name, paths, ports, service]
+      properties:
+        serverId: { type: string }
+        hostId: { type: string }
+        name: { type: string, example: "Goonfront-1" }
+        tags:
+          type: array
+          items: { type: string }
+        paths:
+          $ref: "#/components/schemas/InstancePaths"
+        ports:
+          $ref: "#/components/schemas/InstancePorts"
+        service:
+          $ref: "#/components/schemas/ServiceBinding"
+        config:
+          $ref: "#/components/schemas/InstanceConfig"
+
+    InstancePatch:
+      type: object
+      properties:
+        name: { type: string }
+        tags:
+          type: array
+          items: { type: string }
+        ports:
+          $ref: "#/components/schemas/InstancePorts"
+        service:
+          $ref: "#/components/schemas/ServiceBinding"
+        config:
+          $ref: "#/components/schemas/InstanceConfigPatch"
+
+    Instance:
+      type: object
+      required: [id, serverId, hostId, name, paths, ports, service, createdAt]
+      properties:
+        id: { type: string, example: "inst_01HXYZ" }
+        serverId: { type: string }
+        hostId: { type: string }
+        name: { type: string }
+        tags:
+          type: array
+          items: { type: string }
+        paths:
+          $ref: "#/components/schemas/InstancePaths"
+        ports:
+          $ref: "#/components/schemas/InstancePorts"
+        service:
+          $ref: "#/components/schemas/ServiceBinding"
+        config:
+          $ref: "#/components/schemas/InstanceConfig"
+        runtime:
+          $ref: "#/components/schemas/InstanceRuntime"
+        createdAt: { type: string, format: date-time }
+
+    PagedInstances:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Instance" }
+        nextCursor: { type: string, nullable: true }
+
+    InstancePaths:
+      type: object
+      required: [dcsRoot, savedGames, missionDir, logsDir]
+      properties:
+        dcsRoot: { type: string, example: "D:\\DCS\\DedicatedServer" }
+        savedGames: { type: string, example: "C:\\Users\\User\\Saved Games\\DCS.server1" }
+        missionDir: { type: string, example: "C:\\Missions\\server1" }
+        logsDir: { type: string, example: "C:\\Users\\User\\Saved Games\\DCS.server1\\Logs" }
+
+    InstancePorts:
+      type: object
+      required: [gamePort, webGuiPort]
+      properties:
+        gamePort: { type: integer, minimum: 1, maximum: 65535, example: 10308 }
+        webGuiPort: { type: integer, minimum: 1, maximum: 65535, example: 8088 }
+        srsPort: { type: integer, minimum: 1, maximum: 65535, nullable: true }
+        tacviewPort: { type: integer, minimum: 1, maximum: 65535, nullable: true }
+
+    ServiceBinding:
+      type: object
+      required: [type, name]
+      properties:
+        type:
+          type: string
+          enum: [nssm, systemd, docker]
+          description: Service manager type for this instance
+        name:
+          type: string
+          description: Service name (e.g., NSSM service name)
+        autoStart:
+          type: boolean
+          default: true
+
+    InstanceRuntime:
+      type: object
+      required: [status, observedAt]
+      properties:
+        status:
+          $ref: "#/components/schemas/InstanceStatus"
+        observedAt: { type: string, format: date-time }
+        pid: { type: integer, nullable: true }
+        startedAt: { type: string, format: date-time, nullable: true }
+        uptimeSeconds: { type: integer, nullable: true }
+        lastExitCode: { type: integer, nullable: true }
+        lastError: { type: string, nullable: true }
+
+    VersionInfo:
+      type: object
+      properties:
+        installed: { type: string, example: "2.9.10.12345" }
+        available: { type: string, nullable: true, example: "2.9.10.13000" }
+        channel: { type: string, nullable: true }
+        checkedAt: { type: string, format: date-time, nullable: true }
+
+    Mission:
+      type: object
+      required: [id, name, path]
+      properties:
+        id: { type: string, example: "miz_01HXYZ" }
+        name: { type: string, example: "Goonfront Caucasus v0.3" }
+        path: { type: string, example: "C:\\Missions\\server1\\goonfront_v0_3.miz" }
+        sizeBytes: { type: integer, format: int64, nullable: true }
+        modifiedAt: { type: string, format: date-time, nullable: true }
+
+    MissionCurrent:
+      type: object
+      properties:
+        mission:
+          $ref: "#/components/schemas/Mission"
+        detectedAt:
+          type: string
+          format: date-time
+        source:
+          type: string
+          enum: [webgui, log_parse, agent_state, unknown]
+          default: unknown
+
+    MissionLoadRequest:
+      type: object
+      description: Provide either missionId or path.
+      properties:
+        missionId: { type: string }
+        path: { type: string }
+        restartAfterLoad:
+          type: boolean
+          default: false
+      oneOf:
+        - required: [missionId]
+        - required: [path]
+
+    LogTail:
+      type: object
+      required: [lines, capturedAt]
+      properties:
+        capturedAt: { type: string, format: date-time }
+        lines:
+          type: array
+          items:
+            type: object
+            required: [ts, level, message]
+            properties:
+              ts: { type: string, format: date-time }
+              level: { type: string, enum: [INFO, WARN, ERROR] }
+              message: { type: string }
+
+    LogEvents:
+      type: object
+      required: [events, capturedAt]
+      properties:
+        capturedAt: { type: string, format: date-time }
+        events:
+          type: array
+          items:
+            type: object
+            required: [ts, level, message]
+            properties:
+              ts: { type: string, format: date-time }
+              level: { type: string, enum: [WARN, ERROR] }
+              message: { type: string }
+              context:
+                type: object
+                additionalProperties: true
+
+    InstanceConfig:
+      type: object
+      description: Safe subset of configuration (avoid secrets / unsafe knobs).
+      properties:
+        maxPlayers: { type: integer, minimum: 1, maximum: 200, nullable: true }
+        passwordRequired: { type: boolean, nullable: true }
+        missionRotation:
+          type: object
+          properties:
+            enabled: { type: boolean, default: false }
+            intervalMinutes: { type: integer, minimum: 5, maximum: 1440, nullable: true }
+        logSettings:
+          type: object
+          properties:
+            errorScanEnabled: { type: boolean, default: true }
+            errorScanIntervalSeconds: { type: integer, minimum: 10, maximum: 600, default: 60 }
+
+    InstanceConfigPatch:
+      type: object
+      properties:
+        maxPlayers: { type: integer, minimum: 1, maximum: 200, nullable: true }
+        passwordRequired: { type: boolean, nullable: true }
+        missionRotation:
+          type: object
+          properties:
+            enabled: { type: boolean }
+            intervalMinutes: { type: integer, minimum: 5, maximum: 1440, nullable: true }
+        logSettings:
+          type: object
+          properties:
+            errorScanEnabled: { type: boolean }
+            errorScanIntervalSeconds: { type: integer, minimum: 10, maximum: 600 }
+
+    ValidationResult:
+      type: object
+      required: [ok]
+      properties:
+        ok: { type: boolean }
+        warnings:
+          type: array
+          items: { type: string }
+        errors:
+          type: array
+          items: { type: string }
+
+    JobStatus:
+      type: string
+      enum: [queued, running, succeeded, failed, canceled]
+
+    JobType:
+      type: string
+      enum: [start, stop, restart, update, mission_load, logs_bundle, config_apply, repair]
+
+    JobAccepted:
+      type: object
+      required: [jobId, status]
+      properties:
+        jobId: { type: string, example: "job_01HXYZ" }
+        status:
+          $ref: "#/components/schemas/JobStatus"
+
+    Job:
+      type: object
+      required: [id, type, status, createdAt]
+      properties:
+        id: { type: string }
+        type: { $ref: "#/components/schemas/JobType" }
+        status: { $ref: "#/components/schemas/JobStatus" }
+        instanceId: { type: string, nullable: true }
+        hostId: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        startedAt: { type: string, format: date-time, nullable: true }
+        finishedAt: { type: string, format: date-time, nullable: true }
+        progress:
+          type: object
+          properties:
+            percent: { type: number, format: float, minimum: 0, maximum: 100, nullable: true }
+            message: { type: string, nullable: true }
+        result:
+          type: object
+          additionalProperties: true
+          nullable: true
+        error:
+          type: object
+          nullable: true
+          properties:
+            code: { type: string }
+            message: { type: string }
+            details:
+              type: object
+              additionalProperties: true
+
+    PagedJobs:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Job" }
+        nextCursor: { type: string, nullable: true }
+
+    JobLogs:
+      type: object
+      required: [lines, capturedAt]
+      properties:
+        capturedAt: { type: string, format: date-time }
+        lines:
+          type: array
+          items:
+            type: object
+            required: [ts, level, message]
+            properties:
+              ts: { type: string, format: date-time }
+              level: { type: string, enum: [DEBUG, INFO, WARN, ERROR] }
+              message: { type: string }
+
+    AgentCapabilities:
+      type: object
+      required: [agentVersion, os, supportedServiceTypes, supportedActions]
+      properties:
+        agentVersion: { type: string, example: "0.1.0" }
+        os:
+          type: object
+          properties:
+            family: { type: string, example: "windows" }
+            name: { type: string, example: "Windows 11" }
+            arch: { type: string, example: "x86_64" }
+        supportedServiceTypes:
+          type: array
+          items:
+            type: string
+            enum: [nssm, systemd, docker]
+        supportedActions:
+          type: array
+          items:
+            type: string
+            enum: [start, stop, restart, update, mission_load, logs_bundle, metrics, health]
+        notes: { type: string, nullable: true }

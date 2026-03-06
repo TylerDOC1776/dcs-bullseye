@@ -1,0 +1,106 @@
+# DCS Platform Bot Guide
+
+All commands are under `/dcs` and must be used in the designated bot channel.
+
+---
+
+## Permissions
+
+| Role | Access |
+|------|--------|
+| Everyone | `status`, `hosts`, `jobs` |
+| **DCS Operator** | All commands except `reboot` and `update` |
+| **DCS Admin** | All commands including `reboot` and `update` |
+
+The Operator and Admin role names are configured by the server admin (`OPERATOR_ROLE` and `ADMIN_ROLE` env vars).
+
+---
+
+## Server Control
+
+### `/dcs status [instance]`
+Shows the current status of one or all DCS instances — running/stopped, current mission, map, player count, and uptime. Leave the instance blank to see all at once.
+
+### `/dcs start <instance>`
+Starts a DCS server instance.
+
+### `/dcs stop <instance>`
+Stops a DCS server instance.
+
+### `/dcs restart <instance>`
+Restarts a DCS server instance.
+
+### `/dcs restartall`
+Restarts every instance that is currently running. Useful after uploading a new mission or pushing a config change across all servers.
+
+---
+
+## Missions
+
+### `/dcs mission <instance> <filename>`
+Loads a mission file and restarts the server. The filename autocompletes from the Active Missions folder.
+
+### `/dcs upload <file>`
+Uploads a `.miz` file from your computer directly to the Active Missions folder on the host. Drag and drop the file into Discord when prompted.
+
+### `/dcs download <filename>`
+Downloads a `.miz` file from the Active Missions folder to your computer. Useful for pulling a mission to edit it and re-upload. The file is sent as an ephemeral attachment (only you see it). 25 MB Discord limit applies.
+
+### `/dcs delete <filename>`
+Removes a mission from the Active Missions folder. The file is backed up to a `Backup_Missions` subfolder on the host before deletion — it is not permanently lost.
+
+---
+
+## Server Management
+
+### `/dcs logs <instance>`
+Fetches a log bundle from the DCS server and uploads it as a file. Useful for diagnosing crashes or mission errors.
+
+### `/dcs password <instance> <password>`
+Changes the multiplayer password for a DCS instance and restarts it. The response is ephemeral so the password is never shown in the channel.
+
+### `/dcs resetpersist <instance>`
+Backs up and clears the persistence save files for an instance (carrier positions, warehouse states, etc.). Use this to reset a campaign to its initial state. Requires a confirmation button click before executing.
+
+### `/dcs minimize`
+Minimizes the DCS server windows on the host machine. Useful if someone needs to interact with the desktop without stopping the server.
+
+### `/dcs reboot <host>`
+Reboots a specific Windows host machine. Requires **DCS Admin** role and confirmation before executing. The machine will come back online automatically and the DCS Agent and tunnel services start on boot.
+
+### `/dcs update <host>`
+Stops all DCS servers on a specific host, runs the DCS World updater, then restarts them automatically. Requires **DCS Admin** role and confirmation before executing. The full process takes 10–60 minutes depending on patch size. Progress is reported in the status channel.
+
+---
+
+## Administration
+
+### `/dcs hosts`
+Lists all registered host machines, their agent connection status, and last seen time.
+
+### `/dcs jobs [status]`
+Lists the last 10 background jobs (start, stop, mission load, etc.) and their status. Filter by `queued`, `running`, `succeeded`, or `failed` to troubleshoot stuck operations.
+
+### `/dcs invite [host_name] [expires_in_hours]`
+Generates a one-time invite code for a new community host to join the platform. The response is ephemeral and includes the full PowerShell install command ready to send. Codes expire in 24 hours by default; set `expires_in_hours` to any value between 1 and 168 (7 days max).
+
+### `/dcs clear`
+Deletes recent bot messages from the channel. Useful for cleaning up after a busy session.
+
+---
+
+## Automatic Features
+
+### Live Status Embed
+A status embed is pinned in the designated status channel and refreshes automatically every 5 minutes. It shows all managed instances plus any external servers configured by the admin (TCP ping only — no agent required for those).
+
+### Daily Restart
+If a mission has been running for more than 48 hours, the server will automatically restart at **5:00 AM Eastern** to clear memory and apply any pending changes. This only triggers if the mission time threshold is met.
+
+---
+
+## Notes
+
+- All server control commands (start, stop, restart, mission load, etc.) run as **background jobs**. The bot will report when they complete or fail.
+- `/dcs reboot`, `/dcs delete`, and `/dcs resetpersist` require a confirmation button click before executing.
+- The bot will only respond in the configured bot channel. Commands used elsewhere are silently ignored.
