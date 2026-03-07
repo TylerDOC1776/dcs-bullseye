@@ -8,7 +8,7 @@ All commands are under `/dcs` and must be used in the designated bot channel.
 
 | Role | Access |
 |------|--------|
-| Everyone | `status`, `hosts`, `jobs` |
+| Everyone | `status`, `hosts`, `jobs`, `stats`, `mystats`, `register` |
 | **DCS Operator** | All commands except `reboot` and `update` |
 | **DCS Admin** | All commands including `reboot` and `update` |
 
@@ -73,6 +73,28 @@ Stops all DCS servers on a specific host, runs the DCS World updater, then resta
 
 ---
 
+## Analytics
+
+### `/dcs stats [instance] [period]`
+Shows server-wide player analytics. Optional filters: a specific instance name, and a time period (`7d`, `30d`, or all time — default is 7 days).
+
+Displays:
+- **Sessions** — total player join events
+- **Unique Players** — distinct pilot names seen
+- **Missions Played** — distinct missions people actually played on
+- **Top Players** — top 5 by session count
+- **Top Missions** — top 5 missions by sessions
+- **Top Maps** — top 5 maps by sessions
+- **Peak Hours** — top 8 active hours shown as a bar chart in EST and PST
+
+### `/dcs register <dcs_name>`
+Links your Discord account to your DCS pilot name. Only needs to be done once. Your DCS name is case-sensitive — use it exactly as it appears in-game. Required before using `/dcs mystats`.
+
+### `/dcs mystats [period]`
+Shows your personal stats based on your registered DCS pilot name. Response is ephemeral (only you see it). Displays your sessions, missions and maps played, favourite mission and map, and your personal peak hours.
+
+---
+
 ## Administration
 
 ### `/dcs hosts`
@@ -97,6 +119,9 @@ A status embed is pinned in the designated status channel and refreshes automati
 ### Daily Restart
 If a mission has been running for more than 48 hours, the server will automatically restart at **5:00 AM Eastern** to clear memory and apply any pending changes. This only triggers if the mission time threshold is met.
 
+### Crash Loop Detection
+If an instance crashes and restarts **3 or more times within 10 minutes**, the bot will post a **Crash loop detected** alert in the notification channel. The alert fires once per loop and resets automatically when the instance recovers.
+
 ---
 
 ## Notes
@@ -104,3 +129,4 @@ If a mission has been running for more than 48 hours, the server will automatica
 - All server control commands (start, stop, restart, mission load, etc.) run as **background jobs**. The bot will report when they complete or fail.
 - `/dcs reboot`, `/dcs delete`, and `/dcs resetpersist` require a confirmation button click before executing.
 - The bot will only respond in the configured bot channel. Commands used elsewhere are silently ignored.
+- Analytics data is collected automatically by the agent on each managed host. Stats will be empty until the agent has been running for at least one poll cycle (60 seconds).
