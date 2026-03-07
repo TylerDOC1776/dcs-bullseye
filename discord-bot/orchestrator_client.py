@@ -185,3 +185,11 @@ class OrchestratorClient:
 
     async def get_update_status(self, host_id: str) -> dict:
         return await self._get(f"/hosts/{host_id}/update/status")
+
+    async def get_analytics_events(
+        self,
+        instance_id: str | None = None,
+        since: str | None = None,
+        limit: int = 2000,
+    ) -> list[dict]:
+        return await self._get("/analytics/events", instance_id=instance_id, since=since, limit=limit)

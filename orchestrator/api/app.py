@@ -30,6 +30,7 @@ from .routes import instances as instances_routes
 from .routes import actions as actions_routes
 from .routes import jobs as jobs_routes
 from .routes import events as events_routes
+from .routes import analytics as analytics_routes
 from .routes import registration as registration_routes
 
 logger = logging.getLogger(__name__)
@@ -144,6 +145,9 @@ def create_app(config: OrchestratorConfig) -> FastAPI:
     # Registration endpoints — /register is invite-code gated (no master key required)
     # /invites management requires admin key (enforced inside the router itself)
     app.include_router(registration_routes.router, prefix="/api/v1")
+
+    # Analytics POST � agent-key auth only (no master key); GET covered by _AUTH_DEP via separate include
+    app.include_router(analytics_routes.router, prefix="/api/v1")
 
     # Installer static files — served unauthenticated from /install/
     # Contains agent.zip, install.ps1 (no secrets — secrets come from registration)

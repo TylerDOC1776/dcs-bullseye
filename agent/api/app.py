@@ -15,6 +15,7 @@ import logging
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 
+from ..analytics import run_reporter
 from ..config import AgentConfig
 from ..controller import DcsController
 from ..jobs import JobStore
@@ -104,6 +105,9 @@ def create_app(config: AgentConfig) -> FastAPI:
         auto_instances = [i for i in config.instances if i.auto_start]
         if auto_instances:
             asyncio.create_task(_auto_start_instances(app.state.controller, auto_instances))
+
+        # Analytics reporter — push player/mission events to orchestrator
+        asyncio.create_task(run_reporter(config, app.state.controller))
 
     async def _auto_start_instances(ctrl: DcsController, instances: list) -> None:
         loop = asyncio.get_running_loop()

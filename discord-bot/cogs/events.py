@@ -17,6 +17,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import time
 from typing import TYPE_CHECKING
 
 import discord
@@ -31,6 +32,9 @@ log = logging.getLogger(__name__)
 _SUBSCRIBE_TYPES = "instance.status_changed,job.failed"
 _MIN_BACKOFF = 1.0
 _MAX_BACKOFF = 60.0
+
+_CRASH_LOOP_WINDOW     = 600.0  # seconds — sliding window for crash detection
+_CRASH_LOOP_THRESHOLD  = 3      # crashes within the window triggers an alert
 
 _STATUS_COLOURS: dict[str, int] = {
     "running":  0x2ECC71,
@@ -50,6 +54,9 @@ class EventsCog(commands.Cog):
     def __init__(self, config: BotConfig) -> None:
         self.config = config
         self._task: asyncio.Task | None = None
+        # crash loop detection: instance_id → list of crash timestamps (monotonic)
+        self._crash_times: dict[str, list[float]] = {}
+        self._crash_loop_alerted: set[str] = set()
 
     async def cog_load(self) -> None:
         self._task = asyncio.create_task(self._sse_loop())
@@ -147,6 +154,7 @@ class EventsCog(commands.Cog):
         self, channel: discord.TextChannel, data: dict
     ) -> None:
         instance_name = data.get("name") or data.get("instanceId", "Unknown")
+        instance_id   = data.get("instanceId", instance_name)
         status = data.get("status", "unknown")
         prev = data.get("previousStatus", "?")
 
@@ -154,10 +162,51 @@ class EventsCog(commands.Cog):
         if status == prev:
             return
 
+        # Crash loop detection
+        if status in ("stopped", "error") and prev in ("running", "starting", "stopping"):
+            now = time.monotonic()
+            times = self._crash_times.get(instance_id, [])
+            times.append(now)
+            # prune timestamps outside the sliding window
+            times = [t for t in times if now - t <= _CRASH_LOOP_WINDOW]
+            self._crash_times[instance_id] = times
+
+            if len(times) >= _CRASH_LOOP_THRESHOLD and instance_id not in self._crash_loop_alerted:
+                self._crash_loop_alerted.add(instance_id)
+                await self._on_crash_loop(channel, instance_name, len(times))
+
+        # When an instance recovers and crash history clears, reset alert state
+        if status == "running":
+            times = self._crash_times.get(instance_id, [])
+            now = time.monotonic()
+            times = [t for t in times if now - t <= _CRASH_LOOP_WINDOW]
+            self._crash_times[instance_id] = times
+            if len(times) < _CRASH_LOOP_THRESHOLD:
+                self._crash_loop_alerted.discard(instance_id)
+
         embed = discord.Embed(
             title="Instance status changed",
             description=f"**{instance_name}**: `{prev}` → `{status}`",
             colour=_status_colour(status),
+        )
+        await channel.send(embed=embed)
+
+    async def _on_crash_loop(
+        self, channel: discord.TextChannel, instance_name: str, crash_count: int
+    ) -> None:
+        embed = discord.Embed(
+            title="Crash loop detected",
+            description=(
+                f"**{instance_name}** has crashed **{crash_count} times** "
+                f"in the last {int(_CRASH_LOOP_WINDOW // 60)} minutes.\n"
+                "The server may be stuck in a restart loop."
+            ),
+            colour=0xFF0000,
+        )
+        embed.add_field(
+            name="What to do",
+            value="Use `/dcs status` to check the server, or `/dcs logs` to see recent output.",
+            inline=False,
         )
         await channel.send(embed=embed)
 

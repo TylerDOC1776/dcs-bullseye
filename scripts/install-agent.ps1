@@ -130,6 +130,15 @@ if ($Update) {
     Expand-Archive -Path $agentZip -DestinationPath "$InstallDir\src" -Force
     Remove-Item $agentZip -ErrorAction SilentlyContinue
 
+    Write-Step "Installing/updating Python dependencies"
+    $pip = "$InstallDirenv\Scripts\pip.exe"
+    if (Test-Path $pip) {
+        & $pip install --quiet --upgrade -r "$InstallDir\srcequirements.txt"
+        Write-Ok "Dependencies updated"
+    } else {
+        Write-Warn "venv not found at $InstallDirenv — skipping pip install"
+    }
+
     Write-Step "Starting DCSAgent service"
     Start-Service DCSAgent
     Write-Ok "DCSAgent restarted with updated source"
@@ -357,6 +366,8 @@ $agentCfg = [ordered]@{
     nssm_path           = "$InstallDir\nssm.exe"
     log_dir             = "$InstallDir\logs"
     active_missions_dir = $activeMissionsDir
+    orchestrator_url    = $ORCHESTRATOR
+    host_id             = $reg.hostId
     instances = @(
         [ordered]@{
             name            = $InstanceName

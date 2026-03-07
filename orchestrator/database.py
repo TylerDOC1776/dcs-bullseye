@@ -67,6 +67,19 @@ CREATE TABLE IF NOT EXISTS audit_logs (
 );
 """
 
+_CREATE_ANALYTICS_EVENTS = """
+CREATE TABLE IF NOT EXISTS analytics_events (
+    id           TEXT PRIMARY KEY,
+    timestamp    TEXT NOT NULL,
+    host_id      TEXT NOT NULL,
+    instance_id  TEXT,           -- service_name of the DCS instance
+    event_type   TEXT NOT NULL,  -- player_join | player_leave | mission_start | mission_end
+    player_name  TEXT,           -- set for player_join / player_leave
+    mission_name TEXT,           -- mission active at event time
+    map          TEXT            -- theatre/map at event time
+);
+"""
+
 # Migration: add frp_port to hosts if not present (safe on older DBs)
 _MIGRATE_HOSTS_FRP = "ALTER TABLE hosts ADD COLUMN frp_port INTEGER"
 
@@ -102,6 +115,7 @@ class Database:
         await self._conn.execute(_CREATE_INSTANCES)
         await self._conn.execute(_CREATE_INVITE_CODES)
         await self._conn.execute(_CREATE_AUDIT_LOGS)
+        await self._conn.execute(_CREATE_ANALYTICS_EVENTS)
         # Safe migration: add frp_port column if missing
         try:
             await self._conn.execute(_MIGRATE_HOSTS_FRP)
@@ -352,6 +366,71 @@ class Database:
         else:
             sql = "SELECT * FROM audit_logs ORDER BY timestamp DESC LIMIT ?"
             params = (limit,)
+        async with self._conn.execute(sql, params) as cur:
+            rows = await cur.fetchall()
+        return [dict(r) for r in rows]
+
+    # ------------------------------------------------------------------
+    # Analytics
+    # ------------------------------------------------------------------
+
+    async def get_host_by_agent_key(self, host_id: str, agent_api_key: str) -> dict[str, Any] | None:
+        """Return host row if host_id + agent_api_key match, else None."""
+        row = await self._get_row(
+            "SELECT * FROM hosts WHERE id = ? AND agent_api_key = ?",
+            (host_id, agent_api_key),
+        )
+        return _host_row_to_dict(row) if row else None
+
+    async def write_analytics_event(
+        self,
+        host_id: str,
+        event_type: str,
+        instance_id: str | None = None,
+        player_name: str | None = None,
+        mission_name: str | None = None,
+        map: str | None = None,
+        timestamp: str | None = None,
+    ) -> None:
+        event_id = "evt_" + secrets.token_hex(6)
+        ts = timestamp or _now_iso()
+        assert self._conn
+        await self._conn.execute(
+            """
+            INSERT INTO analytics_events
+                (id, timestamp, host_id, instance_id, event_type, player_name, mission_name, map)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (event_id, ts, host_id, instance_id, event_type, player_name, mission_name, map),
+        )
+        await self._conn.commit()
+
+    async def list_analytics_events(
+        self,
+        host_id: str | None = None,
+        instance_id: str | None = None,
+        event_type: str | None = None,
+        since: str | None = None,
+        limit: int = 1000,
+    ) -> list[dict[str, Any]]:
+        assert self._conn
+        clauses: list[str] = []
+        params: list[Any] = []
+        if host_id:
+            clauses.append("host_id = ?")
+            params.append(host_id)
+        if instance_id:
+            clauses.append("instance_id = ?")
+            params.append(instance_id)
+        if event_type:
+            clauses.append("event_type = ?")
+            params.append(event_type)
+        if since:
+            clauses.append("timestamp >= ?")
+            params.append(since)
+        where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
+        params.append(limit)
+        sql = f"SELECT * FROM analytics_events {where} ORDER BY timestamp DESC LIMIT ?"
         async with self._conn.execute(sql, params) as cur:
             rows = await cur.fetchall()
         return [dict(r) for r in rows]

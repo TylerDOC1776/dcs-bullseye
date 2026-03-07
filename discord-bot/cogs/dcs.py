@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import asyncio
 import io
+import json
 import logging
+import os
 from datetime import datetime, time as dt_time, timezone
 from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
@@ -42,6 +44,29 @@ _TERMINAL_STATES = {"succeeded", "failed"}
 
 def _status_colour(status: str) -> int:
     return _STATUS_COLOURS.get(status.lower(), _COLOUR_UNKNOWN)
+
+
+# ------------------------------------------------------------------ #
+# Player registration (Discord ID → DCS pilot name)                   #
+# ------------------------------------------------------------------ #
+
+_REG_FILE = os.environ.get(
+    "DCS_REGISTRATIONS_FILE",
+    os.path.join(os.path.dirname(__file__), "..", "registrations.json"),
+)
+
+
+def _load_registrations() -> dict[str, str]:
+    try:
+        with open(_REG_FILE, encoding="utf-8") as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+
+
+def _save_registrations(regs: dict[str, str]) -> None:
+    with open(_REG_FILE, "w", encoding="utf-8") as f:
+        json.dump(regs, f, indent=2)
 
 
 async def _check_port(ip: str, port: int, timeout: float = 3.0) -> bool:
@@ -1328,6 +1353,119 @@ class DcsCog(commands.Cog):
                 )
 
         # ---------------------------------------------------------------- #
+        # /dcs stats [server] [period]                                       #
+        # ---------------------------------------------------------------- #
+
+        @self.dcs.command(name="stats", description="Show player and mission analytics")
+        @app_commands.describe(
+            instance="Server to show stats for (leave blank for all)",
+            period="Time period: 7d, 30d, or all time",
+        )
+        @app_commands.autocomplete(instance=_instance_autocomplete)
+        @app_commands.choices(period=[
+            app_commands.Choice(name="Last 7 days",  value="7d"),
+            app_commands.Choice(name="Last 30 days", value="30d"),
+            app_commands.Choice(name="All time",     value="all"),
+        ])
+        async def cmd_stats(
+            interaction: discord.Interaction,
+            instance: str | None = None,
+            period: str = "7d",
+        ) -> None:
+            if not await _check_channel(interaction):
+                return
+            await interaction.response.defer()
+
+            from datetime import datetime, timezone, timedelta
+            from collections import Counter
+
+            if period == "7d":
+                since = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+                period_label = "last 7 days"
+            elif period == "30d":
+                since = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
+                period_label = "last 30 days"
+            else:
+                since = None
+                period_label = "all time"
+
+            try:
+                events = await client.get_analytics_events(
+                    instance_id=instance, since=since, limit=2000
+                )
+            except OrchestratorError as exc:
+                await interaction.followup.send(
+                    f"Orchestrator error: {exc.detail}", ephemeral=True
+                )
+                return
+
+            joins    = [e for e in events if e["event_type"] == "player_join"]
+            missions = [e for e in events if e["event_type"] == "mission_start"]
+
+            player_counts  = Counter(e["player_name"] for e in joins if e.get("player_name"))
+            mission_counts = Counter(e["mission_name"] for e in joins if e.get("mission_name"))
+            map_counts     = Counter(e["map"]          for e in joins if e.get("map"))
+
+            title = "DCS Stats — {} ({})".format(instance or "All Servers", period_label)
+            embed = discord.Embed(title=title, colour=0x3498DB)
+
+            embed.add_field(name="Sessions",       value=str(len(joins)),           inline=True)
+            embed.add_field(name="Unique Players",  value=str(len(player_counts)),  inline=True)
+            embed.add_field(name="Missions Played", value=str(len(mission_counts)),  inline=True)
+
+            if player_counts:
+                top_lines = []
+                for i, (name, n) in enumerate(player_counts.most_common(5)):
+                    suffix = "s" if n != 1 else ""
+                    top_lines.append("{i}. {name} ({n} session{s})".format(i=i+1, name=name, n=n, s=suffix))
+                embed.add_field(name="Top Players", value=chr(10).join(top_lines), inline=True)
+
+            if mission_counts:
+                top_m = []
+                for i, (name, n) in enumerate(mission_counts.most_common(5)):
+                    top_m.append("{i}. {name} ({n}x)".format(i=i+1, name=name[:40], n=n))
+                embed.add_field(name="Top Missions", value=chr(10).join(top_m), inline=True)
+
+            if map_counts:
+                top_map = []
+                for i, (name, n) in enumerate(map_counts.most_common(5)):
+                    suffix = "s" if n != 1 else ""
+                    top_map.append("{i}. {name} ({n} session{s})".format(i=i+1, name=name, n=n, s=suffix))
+                embed.add_field(name="Top Maps", value=chr(10).join(top_map), inline=True)
+
+            # Peak hours bar chart
+            if joins:
+                hour_counts: dict[int, int] = {}
+                for e in joins:
+                    ts = e.get("timestamp") or ""
+                    try:
+                        dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+                        hour_counts[dt.hour] = hour_counts.get(dt.hour, 0) + 1
+                    except Exception:
+                        pass
+                if hour_counts:
+                    def _fmt12(h: int) -> str:
+                        suffix = "am" if h < 12 else "pm"
+                        return f"{h % 12 or 12}{suffix}"
+
+                    max_count = max(hour_counts.values())
+                    bar_len = 8
+                    peak_lines = []
+                    for h in sorted(hour_counts, key=lambda x: -hour_counts[x])[:8]:
+                        n = hour_counts[h]
+                        filled = round(n / max_count * bar_len)
+                        bar = "\u2588" * filled + "\u2591" * (bar_len - filled)
+                        est = _fmt12((h - 5) % 24)
+                        pst = _fmt12((h - 8) % 24)
+                        peak_lines.append(f"{est} EST / {pst} PST  {bar} {n}")
+                    embed.add_field(name="Peak Hours", value=chr(10).join(peak_lines), inline=False)
+
+            if not joins and not missions:
+                embed.description = "No data yet for this period."
+
+            await interaction.followup.send(embed=embed)
+
+        # ---------------------------------------------------------------- #
         # /dcs reboot                                                        #
         # ---------------------------------------------------------------- #
 
@@ -1431,3 +1569,132 @@ class DcsCog(commands.Cog):
             await interaction.edit_original_response(
                 content="✅ Update triggered. Watch the status channel for progress.", view=None
             )
+
+        # ---------------------------------------------------------------- #
+        # /dcs register                                                      #
+        # ---------------------------------------------------------------- #
+
+        @self.dcs.command(name="register", description="Link your Discord account to your DCS pilot name")
+        @app_commands.describe(dcs_name="Your exact DCS pilot name (case-sensitive)")
+        async def cmd_register(interaction: discord.Interaction, dcs_name: str) -> None:
+            regs = _load_registrations()
+            old = regs.get(str(interaction.user.id))
+            regs[str(interaction.user.id)] = dcs_name
+            _save_registrations(regs)
+            if old and old != dcs_name:
+                msg = f"Updated your DCS name from `{old}` to `{dcs_name}`."
+            else:
+                msg = f"Registered! Your Discord account is now linked to DCS pilot `{dcs_name}`."
+            await interaction.response.send_message(msg, ephemeral=True)
+
+        # ---------------------------------------------------------------- #
+        # /dcs mystats                                                       #
+        # ---------------------------------------------------------------- #
+
+        @self.dcs.command(name="mystats", description="Show your personal DCS stats")
+        @app_commands.describe(period="Time period: 7d, 30d, or all time")
+        @app_commands.choices(period=[
+            app_commands.Choice(name="Last 7 days",  value="7d"),
+            app_commands.Choice(name="Last 30 days", value="30d"),
+            app_commands.Choice(name="All time",     value="all"),
+        ])
+        async def cmd_mystats(
+            interaction: discord.Interaction,
+            period: str = "7d",
+        ) -> None:
+            regs = _load_registrations()
+            dcs_name = regs.get(str(interaction.user.id))
+            if not dcs_name:
+                await interaction.response.send_message(
+                    "You haven't registered yet. Use `/dcs register <your DCS pilot name>` first.",
+                    ephemeral=True,
+                )
+                return
+
+            await interaction.response.defer(ephemeral=True)
+
+            from collections import Counter
+
+            from datetime import timedelta
+            if period == "7d":
+                since = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+                period_label = "last 7 days"
+            elif period == "30d":
+                since = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
+                period_label = "last 30 days"
+            else:
+                since = None
+                period_label = "all time"
+
+            try:
+                events = await client.get_analytics_events(since=since, limit=2000)
+            except OrchestratorError as exc:
+                await interaction.followup.send(f"Orchestrator error: {exc.detail}", ephemeral=True)
+                return
+
+            my_joins = [
+                e for e in events
+                if e["event_type"] == "player_join" and e.get("player_name") == dcs_name
+            ]
+
+            embed = discord.Embed(
+                title=f"Stats for {dcs_name}",
+                description=f"Period: {period_label}",
+                colour=0x3498DB,
+            )
+
+            embed.add_field(name="Sessions", value=str(len(my_joins)), inline=True)
+
+            mission_counts = Counter(e["mission_name"] for e in my_joins if e.get("mission_name"))
+            embed.add_field(name="Missions Played", value=str(len(mission_counts)), inline=True)
+
+            map_counts = Counter(e["map"] for e in my_joins if e.get("map"))
+            embed.add_field(name="Maps Played", value=str(len(map_counts)), inline=True)
+
+            if mission_counts:
+                fav_mission, fav_count = mission_counts.most_common(1)[0]
+                embed.add_field(
+                    name="Favourite Mission",
+                    value=f"{fav_mission[:50]} ({fav_count}x)",
+                    inline=True,
+                )
+
+            if map_counts:
+                fav_map, fav_map_count = map_counts.most_common(1)[0]
+                embed.add_field(
+                    name="Favourite Map",
+                    value=f"{fav_map} ({fav_map_count}x)",
+                    inline=True,
+                )
+
+            # Personal peak hours
+            if my_joins:
+                def _fmt12(h: int) -> str:
+                    suffix = "am" if h < 12 else "pm"
+                    return f"{h % 12 or 12}{suffix}"
+
+                hour_counts: dict[int, int] = {}
+                for e in my_joins:
+                    ts = e.get("timestamp") or ""
+                    try:
+                        dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+                        hour_counts[dt.hour] = hour_counts.get(dt.hour, 0) + 1
+                    except Exception:
+                        pass
+                if hour_counts:
+                    max_count = max(hour_counts.values())
+                    bar_len = 8
+                    peak_lines = []
+                    for h in sorted(hour_counts, key=lambda x: -hour_counts[x])[:5]:
+                        n = hour_counts[h]
+                        filled = round(n / max_count * bar_len)
+                        bar = "\u2588" * filled + "\u2591" * (bar_len - filled)
+                        est = _fmt12((h - 5) % 24)
+                        pst = _fmt12((h - 8) % 24)
+                        peak_lines.append(f"{est} EST / {pst} PST  {bar} {n}")
+                    embed.add_field(name="Your Peak Hours", value=chr(10).join(peak_lines), inline=False)
+
+            if not my_joins:
+                embed.description = f"No sessions found for `{dcs_name}` in this period."
+
+            await interaction.followup.send(embed=embed, ephemeral=True)

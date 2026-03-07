@@ -43,6 +43,8 @@ class AgentConfig:
     port: int = 8787
     active_missions_dir: str = ""                    # shared mission library folder (walked by /missions)
     max_upload_bytes: int = 100 * 1024 * 1024        # max .miz upload size (default 100 MB)
+    orchestrator_url: str = ""                       # e.g. https://my-vps:8888 — set by installer
+    host_id: str = ""                                # assigned by orchestrator at registration
 
 
 def _parse_instances(raw: list[dict[str, Any]]) -> list[InstanceConfig]:
@@ -80,7 +82,7 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> AgentConfig:
         raise ConfigError(f"Config file not found: {cfg_path}")
 
     try:
-        data = json.loads(cfg_path.read_text(encoding="utf-8"))
+        data = json.loads(cfg_path.read_text(encoding="utf-8-sig"))
     except json.JSONDecodeError as exc:
         raise ConfigError(f"Invalid config JSON: {exc}") from exc
 
@@ -98,4 +100,6 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> AgentConfig:
         port=int(data.get("port", 8787)),
         active_missions_dir=str(data.get("active_missions_dir", "")),
         max_upload_bytes=int(data.get("max_upload_bytes", 100 * 1024 * 1024)),
+        orchestrator_url=str(data.get("orchestrator_url", "")),
+        host_id=str(data.get("host_id", "")),
     )

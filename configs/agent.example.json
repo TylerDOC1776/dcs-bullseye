@@ -7,6 +7,9 @@
   "api_key": "change-me",
   "host": "0.0.0.0",
   "port": 8787,
+  "_comment_analytics": "Set by installer — leave blank to disable analytics push.",
+  "orchestrator_url": "",
+  "host_id": "",
   "instances": [
     {
       "_comment": "Instance 1 â€” primary server",
