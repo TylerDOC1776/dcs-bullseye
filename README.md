@@ -37,4 +37,12 @@ pip install -r requirements.txt
 python -m agent serve
 ```
 
-See the `docs/` folder for full architecture and API details.
+### Discord Bot
+```bash
+cd discord-bot
+pip install -r requirements.txt
+cp .env.example .env  # fill in DISCORD_TOKEN, GUILD_ID, ORCHESTRATOR_URL
+python bot.py
+```
+
+See `docs/bot-guide.md` for the full command reference and `docs/` for architecture and API details.

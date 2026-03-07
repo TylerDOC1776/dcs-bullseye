@@ -16,8 +16,9 @@ orchestrator/
 ├── __main__.py          # python -m orchestrator entry point
 ├── cli.py               # argparse CLI
 ├── config.py            # OrchestratorConfig dataclass + JSON loader
-├── database.py          # aiosqlite Database class (hosts + instances)
+├── database.py          # aiosqlite Database class (hosts, instances, analytics)
 ├── jobs.py              # In-memory JobStore
+├── events.py            # EventBus for SSE broadcasting
 ├── agent_client.py      # Async httpx wrapper for agent APIs
 ├── server.py            # uvicorn.run() wrapper
 ├── requirements.txt
@@ -26,11 +27,14 @@ orchestrator/
     ├── auth.py          # X-API-Key dependency
     ├── models.py        # Pydantic models
     └── routes/
-        ├── health.py    # GET /health
-        ├── hosts.py     # CRUD + proxy health
-        ├── instances.py # CRUD + live status
-        ├── actions.py   # POST action → async job
-        └── jobs.py      # GET jobs / GET jobs/{id}
+        ├── health.py       # GET /health
+        ├── hosts.py        # CRUD + proxy health
+        ├── instances.py    # CRUD + live status
+        ├── actions.py      # POST action → async job
+        ├── jobs.py         # GET jobs / GET jobs/{id}
+        ├── events.py       # SSE stream + WebSocket
+        ├── analytics.py    # POST (agent push) + GET (admin query) analytics events
+        └── registration.py # Community host self-registration with invite codes
 ```
 
 ---
@@ -73,6 +77,11 @@ python -m orchestrator serve --host 127.0.0.1 --port 9000
 | POST | `/api/v1/instances/{instanceId}/actions/{action}` | Yes | Trigger async action |
 | GET | `/api/v1/jobs` | Yes | List jobs (`?status=` filter) |
 | GET | `/api/v1/jobs/{jobId}` | Yes | Poll job status |
+| GET | `/api/v1/events/stream` | Yes | SSE event stream (status changes, job failures) |
+| POST | `/api/v1/analytics/events` | Agent key | Ingest analytics events from agents |
+| GET | `/api/v1/analytics/events` | Yes | Query stored analytics events |
+| POST | `/api/v1/register` | Invite code | Community host self-registration |
+| POST | `/api/v1/invites` | Yes | Generate a community host invite code |
 
 Swagger UI: `http://localhost:8888/api/v1/docs`
 

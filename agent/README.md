@@ -19,10 +19,11 @@ agent/
 ├── config.py         — dataclasses + JSON loader
 ├── nssm.py           — thin subprocess wrapper around nssm.exe
 ├── controller.py     — high-level per-instance operations
+├── analytics.py      — background reporter: polls DCS, pushes events to orchestrator
 ├── cli.py            — argparse CLI (includes `serve` subcommand)
 ├── jobs.py           — in-memory async job store
 ├── server.py         — uvicorn entry point
-├── requirements.txt  — fastapi, uvicorn
+├── requirements.txt  — fastapi, uvicorn, aiohttp
 └── api/
     ├── app.py        — FastAPI application factory
     ├── auth.py       — X-API-Key authentication dependency
@@ -61,6 +62,8 @@ Edit `config.json`:
 - Set `log_path` to each instance's `dcs.log`
 - Set `missions_dir` to each instance's Missions folder
 - Set `nssm_path` if nssm.exe is not on PATH
+- Set `orchestrator_url` to your orchestrator's public URL (e.g. `https://goon.gsquad.cc`) — enables analytics reporting
+- Set `host_id` to the host ID assigned during registration — required for analytics
 
 ### 2. Point the env var at your config (optional)
 
