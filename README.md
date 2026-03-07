@@ -1,3 +1,5 @@
+<img src="https://raw.githubusercontent.com/wiki/TylerDOC1776/dcs-bullseye/dcs-bullseyelogo.png" alt="DCS Bullseye" width="150">
+
 # dcs-bullseye
 
 DCS World server management system — Discord bot + orchestrator + Windows agent.
