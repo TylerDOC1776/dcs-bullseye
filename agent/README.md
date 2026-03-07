@@ -2,7 +2,7 @@
 
 FastAPI agent that runs under NSSM on Windows DCS server machines. Replaces the archived node service. Handles DCS process control, log collection, and mission deployment; communicates with the orchestrator over an frp reverse tunnel.
 
-See `docs/OpenAPI.yaml` for the full API contract and `docs/notes.md` for NSSM/FastAPI notes.
+See `docs/OpenAPI.yaml` for the full API contract and `docs/network-overview.md` for architecture context.
 
 ## Status
 

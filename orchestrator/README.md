@@ -2,7 +2,7 @@
 
 FastAPI hub server that registers DCS agent nodes, stores host/instance metadata in SQLite, and proxies instance operations to agent APIs.
 
-See `docs/OpenAPI.yaml` for the full API contract and `docs/architecture.md` for design context.
+See `docs/OpenAPI.yaml` for the full API contract and `docs/network-overview.md` for architecture context.
 
 **Status:** Implemented — config, DB layer, agent client, auth, all routes, and CLI serve entry point complete.
 

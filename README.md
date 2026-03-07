@@ -16,8 +16,8 @@ DCS World server management system — Discord bot + orchestrator + Windows agen
 ## Docs
 
 - `docs/OpenAPI.yaml` — Full REST API contract (source of truth)
-- `docs/architecture.md` — System architecture overview
-- `docs/network-overview.md` — Tunnel and connectivity diagram
+- `docs/network-overview.md` — Architecture, tunnel and connectivity diagram
+- `docs/bot-guide.md` — Full user command reference
 
 ## Quick Reference
 
