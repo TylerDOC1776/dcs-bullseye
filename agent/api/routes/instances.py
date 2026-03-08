@@ -205,12 +205,11 @@ async def download_active_mission(filename: str, request: Request) -> Response:
         filename = sanitize_miz_filename(filename)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-    root = Path(active_dir)
-    try:
-        path = safe_join(root, filename)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
-    if not path.exists():
+    root = Path(active_dir).resolve()
+    # Derive the path from the filesystem rather than constructing it from
+    # user-supplied data.  iterdir() entries are not tainted by user input.
+    path = next((e for e in root.iterdir() if e.is_file() and e.name == filename), None)
+    if path is None:
         raise HTTPException(status_code=404, detail=f"{filename!r} not found")
     return FileResponse(path, media_type="application/octet-stream", filename=filename)
 
