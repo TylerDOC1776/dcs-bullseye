@@ -96,6 +96,46 @@ def _fmt_duration(seconds: float) -> str:
     return f"{d}d {h}h" if h else f"{d}d"
 
 
+def _pair_sessions(events: list[dict]) -> list[tuple[str, str, float]]:
+    """Pair player_join/player_leave events into completed sessions.
+
+    Returns list of (player_name, instance_id, duration_seconds) for each
+    matched join→leave pair. Unmatched joins (player still online) are skipped.
+    Sessions longer than 24 h are capped and excluded as likely data gaps.
+    """
+    joins_by_key: dict[tuple, list[datetime]] = {}
+    leaves_by_key: dict[tuple, list[datetime]] = {}
+
+    for e in events:
+        if not e.get("player_name"):
+            continue
+        key = (e["player_name"], e.get("instance_id") or "")
+        ts_str = e.get("timestamp") or ""
+        try:
+            ts = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
+        except Exception:
+            continue
+        if e["event_type"] == "player_join":
+            joins_by_key.setdefault(key, []).append(ts)
+        elif e["event_type"] == "player_leave":
+            leaves_by_key.setdefault(key, []).append(ts)
+
+    sessions: list[tuple[str, str, float]] = []
+    for key, join_times in joins_by_key.items():
+        player_name, instance_id = key
+        leave_times = sorted(leaves_by_key.get(key, []))
+        used: set[int] = set()
+        for jt in sorted(join_times):
+            for li, lt in enumerate(leave_times):
+                if li not in used and lt > jt:
+                    duration = (lt - jt).total_seconds()
+                    if duration <= 86400:
+                        sessions.append((player_name, instance_id, duration))
+                    used.add(li)
+                    break
+    return sessions
+
+
 def _fmt_game_time(seconds: int) -> str:
     """Format in-game mission clock as H:MM:SS."""
     s = int(seconds)
@@ -1460,6 +1500,17 @@ class DcsCog(commands.Cog):
                         peak_lines.append(f"{est} EST / {pst} PST  {bar} {n}")
                     embed.add_field(name="Peak Hours", value=chr(10).join(peak_lines), inline=False)
 
+            # Session duration
+            sessions = _pair_sessions(events)
+            if sessions:
+                durations = [d for _, _, d in sessions]
+                avg_dur = sum(durations) / len(durations)
+                embed.add_field(
+                    name="Avg Session Length",
+                    value=f"{_fmt_duration(avg_dur)} ({len(durations)} completed)",
+                    inline=False,
+                )
+
             if not joins and not missions:
                 embed.description = "No data yet for this period."
 
@@ -1637,6 +1688,15 @@ class DcsCog(commands.Cog):
                 if e["event_type"] == "player_join" and e.get("player_name") == dcs_name
             ]
 
+            # Pair join/leave for this player to compute session durations
+            my_events = [
+                e for e in events
+                if e.get("player_name") == dcs_name
+                and e["event_type"] in ("player_join", "player_leave")
+            ]
+            my_sessions = _pair_sessions(my_events)
+            my_durations = [d for _, _, d in my_sessions]
+
             embed = discord.Embed(
                 title=f"Stats for {dcs_name}",
                 description=f"Period: {period_label}",
@@ -1650,6 +1710,12 @@ class DcsCog(commands.Cog):
 
             map_counts = Counter(e["map"] for e in my_joins if e.get("map"))
             embed.add_field(name="Maps Played", value=str(len(map_counts)), inline=True)
+
+            if my_durations:
+                avg_dur = sum(my_durations) / len(my_durations)
+                total_dur = sum(my_durations)
+                embed.add_field(name="Avg Session", value=_fmt_duration(avg_dur), inline=True)
+                embed.add_field(name="Total Time", value=_fmt_duration(total_dur), inline=True)
 
             if mission_counts:
                 fav_mission, fav_count = mission_counts.most_common(1)[0]
