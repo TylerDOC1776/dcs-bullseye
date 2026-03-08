@@ -21,7 +21,14 @@ DCS World server management system — Discord bot + orchestrator + Windows agen
 - `docs/network-overview.md` — Architecture, tunnel and connectivity diagram
 - `docs/bot-guide.md` — Full user command reference
 
-## Quick Reference
+## Deployment
+
+| Step | Script | Platform |
+|------|--------|----------|
+| 1. Set up VPS | `scripts/install-vps.sh` | Linux (Debian/Ubuntu) |
+| 2. Connect Windows DCS host | `scripts/install-agent.ps1` | Windows (via invite code) |
+
+## Quick Reference (development)
 
 ### Orchestrator
 ```bash
