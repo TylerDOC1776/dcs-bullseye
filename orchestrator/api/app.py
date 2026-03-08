@@ -146,7 +146,7 @@ def create_app(config: OrchestratorConfig) -> FastAPI:
     # /invites management requires admin key (enforced inside the router itself)
     app.include_router(registration_routes.router, prefix="/api/v1")
 
-    # Analytics POST — agent-key auth only (no master key); GET covered by _AUTH_DEP via separate include
+    # Analytics POST -- agent-key auth only (no master key); GET covered by _AUTH_DEP via separate include
     app.include_router(analytics_routes.router, prefix="/api/v1")
 
     # Installer static files â€” served unauthenticated from /install/

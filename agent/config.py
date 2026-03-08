@@ -43,7 +43,7 @@ class AgentConfig:
     port: int = 8787
     active_missions_dir: str = ""                    # shared mission library folder (walked by /missions)
     max_upload_bytes: int = 100 * 1024 * 1024        # max .miz upload size (default 100 MB)
-    orchestrator_url: str = ""                       # e.g. https://my-vps:8888 — set by installer
+    orchestrator_url: str = ""                       # e.g. https://my-vps:8888 --ï¿½ set by installer
     host_id: str = ""                                # assigned by orchestrator at registration
 
 

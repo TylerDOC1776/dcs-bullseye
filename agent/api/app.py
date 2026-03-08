@@ -106,7 +106,7 @@ def create_app(config: AgentConfig) -> FastAPI:
         if auto_instances:
             asyncio.create_task(_auto_start_instances(app.state.controller, auto_instances))
 
-        # Analytics reporter — push player/mission events to orchestrator
+        # Analytics reporter -- push player/mission events to orchestrator
         asyncio.create_task(run_reporter(config, app.state.controller))
 
     async def _auto_start_instances(ctrl: DcsController, instances: list) -> None:
