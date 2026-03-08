@@ -15,7 +15,7 @@
 
 | # | Feature | Difficulty | Notes |
 |---|---------|------------|-------|
-| 1 | Community host status in embed | Medium | Show East Coast BBQ and other external servers with minimal info (TCP ping only, no agent) — already shown in status embed but could be richer |
+| 1 | Community host status in embed | Medium | Show external servers configured without an agent with richer info beyond TCP ping — already shown in status embed but could be improved |
 | 2 | Auto-update schedule | Medium | Run DCS update automatically at a configured time instead of manual `/dcs update` trigger |
 | 3 | Scheduled mission rotation | Medium | Auto-cycle through a mission playlist on a timer — configurable per instance |
 | 4 | Mission vote / rotation command | Hard | Let players vote to change the active mission via Discord; majority wins |
@@ -24,4 +24,4 @@
 | 7 | Analytics retention / pruning | Easy | Auto-delete analytics events older than N days to keep DB small |
 | 8 | `/dcs stats` trend comparison | Medium | Compare this week vs last week for player counts and activity |
 | 9 | Adaptive Defense mission | Hard | Dynamic DCS mission that spawns threats based on player aircraft type and loadout (see `adaptive-defense.md`) |
-| 10 | Goonfront campaign | Hard | Large-scale tug-of-war campaign on Caucasus (see `goonfront.md`) |
+| 10 | Large-scale campaign | Hard | Tug-of-war campaign on Caucasus with zone capture, troop drops, and frontline push mechanics (see `goonfront.md`) |
