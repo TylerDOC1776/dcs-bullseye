@@ -196,8 +196,22 @@ def _dedup_blocks(blocks: list[list[str]]) -> list[str]:
 # Task Scheduler helpers (for instances with manager="task")
 # ------------------------------------------------------------------
 
+def _kill_any_dcs_server() -> None:
+    """Kill all DCS_server.exe processes regardless of how they were started.
+
+    Prevents port conflicts when a user has DCS running via a desktop shortcut
+    (without -w flag) at the same time the agent tries to start it via Task Scheduler.
+    """
+    subprocess.run(
+        ["powershell", "-NoProfile", "-Command",
+         "Get-Process DCS_server -ErrorAction SilentlyContinue | Stop-Process -Force"],
+        capture_output=True, text=True,
+    )
+
+
 def _task_start(task_name: str) -> None:
     """Start a Windows Task Scheduler task by name."""
+    _kill_any_dcs_server()
     result = subprocess.run(
         ["schtasks", "/run", "/tn", task_name],
         capture_output=True, text=True,
