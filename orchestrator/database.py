@@ -139,6 +139,7 @@ class Database:
         agent_api_key: str = "",
         tags: list[str] | None = None,
         notes: str | None = None,
+        frp_port: int | None = None,
     ) -> dict[str, Any]:
         host_id = "host_" + secrets.token_hex(6)
         now = _now_iso()
@@ -146,10 +147,10 @@ class Database:
         assert self._conn
         await self._conn.execute(
             """
-            INSERT INTO hosts (id, name, agent_url, agent_api_key, tags, notes, is_enabled, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, 1, ?)
+            INSERT INTO hosts (id, name, agent_url, agent_api_key, tags, notes, is_enabled, created_at, frp_port)
+            VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)
             """,
-            (host_id, name, agent_url, agent_api_key, tags_json, notes, now),
+            (host_id, name, agent_url, agent_api_key, tags_json, notes, now, frp_port),
         )
         await self._conn.commit()
         row = await self._get_row("SELECT * FROM hosts WHERE id = ?", (host_id,))

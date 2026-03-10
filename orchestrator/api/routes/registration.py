@@ -74,9 +74,8 @@ async def register_host(body: RegisterRequest, request: Request) -> JSONResponse
         agent_url=agent_url,
         agent_api_key=agent_api_key,
         tags=["community"],
+        frp_port=frp_port,
     )
-    # Set frp_port on the new host row
-    await db.update_host(host_row["id"], {"frp_port": frp_port})
 
     # Mark invite used
     await db.consume_invite(body.inviteCode, host_row["id"])
