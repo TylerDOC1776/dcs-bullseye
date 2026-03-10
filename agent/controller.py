@@ -537,7 +537,7 @@ class DcsController:
         Update serverSettings.lua to load *mission_file*, then restart the service.
 
         mission_file may be:
-          - A bare filename resolved against instance.missions_dir
+          - A bare filename resolved against instance.missions_dir, then active_missions_dir
           - An absolute path (e.g. from active_missions_dir)
 
         Returns the absolute path of the mission that was set.
@@ -548,6 +548,11 @@ class DcsController:
             mission_path = candidate
         else:
             mission_path = missions_dir / mission_file
+            # Also check active_missions_dir for bare filenames
+            if not mission_path.exists() and self._config.active_missions_dir:
+                active_path = Path(self._config.active_missions_dir) / mission_file
+                if active_path.exists():
+                    mission_path = active_path
 
         if mission_path.suffix.lower() != ".miz":
             raise ValueError(f"Not a .miz file: {mission_file!r}")
@@ -680,15 +685,13 @@ class DcsController:
         return {"filename": filename, "path": str(dest), "size_bytes": dest.stat().st_size}
 
     def upload_active_mission(self, filename: str, data: bytes) -> dict:
-        """Save uploaded bytes to active_missions_dir root."""
+        """Save uploaded bytes to active_missions_dir root, overwriting any existing file."""
         active_dir = self._config.active_missions_dir
         if not active_dir:
             raise ValueError("active_missions_dir not configured")
         dest_dir = Path(active_dir)
         dest_dir.mkdir(parents=True, exist_ok=True)
         dest = dest_dir / filename
-        if dest.exists():
-            raise FileExistsError(f"A file named {filename!r} already exists in Active Missions")
         dest.write_bytes(data)
         return {"path": str(dest), "filename": filename, "size": len(data)}
 

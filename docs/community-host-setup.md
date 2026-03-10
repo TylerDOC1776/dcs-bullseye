@@ -13,7 +13,7 @@ The platform VPS must already be running before community hosts can join. If you
 
 2. **Run DCS server at least once**
    Launch it, let it get to the main menu or start a mission, then close it.
-   This creates the Saved Games profile the installer needs to find.
+   This creates the Saved Games profile the installer needs to find, and generates `serverSettings.lua` which is required for mission loading.
 
 ---
 
@@ -27,25 +27,32 @@ $f="$env:TEMP\install-agent.ps1"; iwr -UseBasicParsing <ORCHESTRATOR_URL>/instal
 
 Run the exact command the admin sends you — don't modify the URL or invite code.
 
-Follow any prompts (it will ask for a host name and confirm the DCS install path if it can't find it automatically).
+The installer will prompt you for:
+- A **host name** shown in Discord (e.g. "East Coast BBQ")
+- A **server instance name** shown in Discord commands (e.g. "MySquadron Server")
+- Your DCS Saved Games profile key if it can't be detected automatically (e.g. `DCS.openbeta_server`)
 
-The installer handles everything automatically:
-- Downloads and installs the DCS Agent
-- Creates your Active Missions folder
-- Sets up the tunnel back to the central server
+The installer handles everything else automatically:
+- Downloads and installs the DCS Agent and Python environment
+- Creates your Active Missions folder inside your DCS Saved Games profile
+- Sets up the encrypted tunnel back to the central server (no public IP needed)
 - Registers your host so it appears in Discord
-- Installs the DCS Lua status hook
+- Installs the DCS Lua status hook for live player and mission info
+- Creates desktop shortcuts for starting your server and updating the agent
+- Removes the default DCS World Server desktop shortcut
 
 ---
 
 ## Mission Files
 
-Your Active Missions folder is created automatically at:
+Your Active Missions folder is created at:
 ```
 C:\Users\[you]\Saved Games\[DCS profile]\Active Missions\
 ```
 
-Drop `.miz` files here and they'll show up in `/dcs mission`. If the folder already exists, the installer leaves it and its contents untouched.
+Drop `.miz` files here and they'll show up in `/dcs mission`. You can also use `/dcs upload` from Discord to push files directly, or `/dcs copy-mission` to stage a mission from any server's Missions folder into the Active Missions library.
+
+Mission files are automatically transferred between hosts — if you run `/dcs mission` on your server and pick a mission that lives on a different host, it will be fetched and copied over automatically before loading.
 
 ---
 
@@ -59,10 +66,26 @@ Drop `.miz` files here and they'll show up in `/dcs mission`. If the folder alre
 
 ## Updating the Agent
 
-If the server admin pushes an update, run this in **PowerShell as Administrator** (replace `<ORCHESTRATOR_URL>` with the URL from your original install command):
+If the server admin pushes an update, run this in **PowerShell as Administrator**:
 
 ```powershell
-$f="$env:TEMP\install-agent.ps1"; iwr -UseBasicParsing <ORCHESTRATOR_URL>/install/install.ps1 -OutFile $f; powershell -ExecutionPolicy Bypass -File $f -Update
+$f="$env:TEMP\install-agent.ps1"; iwr -UseBasicParsing <ORCHESTRATOR_URL>/install/install.ps1 -OutFile $f; powershell -ExecutionPolicy Bypass -File $f -Update -OrchestratorUrl <ORCHESTRATOR_URL>
 ```
 
-This pulls the latest agent code and restarts the service. No re-registration needed.
+Replace `<ORCHESTRATOR_URL>` with the URL from your original install command. This pulls the latest agent code and restarts the service. No re-registration needed.
+
+You can also use the **Update DCS Agent** desktop shortcut created during install — it remembers the URL automatically.
+
+---
+
+## Uninstalling
+
+To remove the agent from your machine, run this in **PowerShell as Administrator**:
+
+```powershell
+$f="$env:TEMP\uninstall-agent.ps1"; iwr -UseBasicParsing <ORCHESTRATOR_URL>/install/uninstall.ps1 -OutFile $f; powershell -ExecutionPolicy Bypass -File $f
+```
+
+This stops and removes the DCSAgent and tunnel services, deletes the Task Scheduler tasks, removes the Lua hook, and deletes the install directory. Your DCS Saved Games profile and mission files are not touched.
+
+After uninstalling, ask an admin to run `/dcs remove-host` in Discord to remove your host from the platform.

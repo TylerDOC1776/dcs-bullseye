@@ -133,10 +133,18 @@ if ($Update) {
     Write-Step "Installing/updating Python dependencies"
     $pip = "$InstallDir\venv\Scripts\pip.exe"
     if (Test-Path $pip) {
-        & $pip install --quiet --upgrade -r "$InstallDir\src\requirements.txt"
+        & $pip install --quiet --upgrade -r "$InstallDir\src\agent\requirements.txt"
+        if ($LASTEXITCODE -ne 0) { throw "pip install failed (exit $LASTEXITCODE)" }
         Write-Ok "Dependencies updated"
     } else {
         Write-Warn "venv not found at $InstallDir\venv — skipping pip install"
+    }
+
+    # Copy helper scripts to install root (used by Task Scheduler tasks)
+    $updateScriptSrc = "$InstallDir\src\agent\scripts\update_DCS_auto.ps1"
+    if (Test-Path $updateScriptSrc) {
+        Copy-Item $updateScriptSrc "$InstallDir\update_DCS_auto.ps1" -Force
+        Write-Ok "update_DCS_auto.ps1 updated"
     }
 
     Write-Step "Starting DCSAgent service"
@@ -343,7 +351,9 @@ $python   = "$venvDir\Scripts\python.exe"
 
 & $pyCmd -m venv $venvDir
 & $python -m pip install --quiet --upgrade pip
-& $pip install --quiet -r "$InstallDir\src\requirements.txt"
+if ($LASTEXITCODE -ne 0) { throw "pip upgrade failed (exit $LASTEXITCODE)" }
+& $pip install -r "$InstallDir\src\agent\requirements.txt"
+if ($LASTEXITCODE -ne 0) { throw "pip install requirements failed (exit $LASTEXITCODE)" }
 Write-Ok "venv ready: $venvDir"
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -548,7 +558,7 @@ Write-Step "Creating DCS-UpdateDCS update task"
 
 # Copy the update script into the install directory
 $updateScript = "$InstallDir\update_DCS_auto.ps1"
-$updateScriptSrc = "$InstallDir\src\scripts\update_DCS_auto.ps1"
+$updateScriptSrc = "$InstallDir\src\agent\scripts\update_DCS_auto.ps1"
 if (Test-Path $updateScriptSrc) {
     Copy-Item $updateScriptSrc $updateScript -Force
 } else {
@@ -604,7 +614,7 @@ Write-Step "Installing DCS Lua status hook"
 $hooksDir = "$savedGamesPath\Scripts\Hooks"
 New-Item -ItemType Directory -Force -Path $hooksDir | Out-Null
 
-$hookSrc = "$InstallDir\src\scripts\dcs_agent_hook.lua"
+$hookSrc = "$InstallDir\src\agent\scripts\dcs_agent_hook.lua"
 if (Test-Path $hookSrc) {
     Copy-Item $hookSrc "$hooksDir\dcs_agent_hook.lua" -Force
     Write-Ok "Hook installed to $hooksDir"
@@ -646,8 +656,18 @@ try {
 Write-Step "Desktop shortcuts"
 $createShortcuts = Read-Host "  Create desktop shortcuts for starting and updating? [Y/n]"
 if ($createShortcuts -eq "" -or $createShortcuts -match "^[Yy]") {
-    $desktop = [System.Environment]::GetFolderPath("Desktop")
-    $wsh     = New-Object -ComObject WScript.Shell
+    $desktop  = [System.Environment]::GetFolderPath("Desktop")
+    $wsh      = New-Object -ComObject WScript.Shell
+    $dcsIco   = "$env:SystemDrive\Program Files\Eagle Dynamics\DCS World Server\FUI\DCS-3.ico"
+
+    # ── Remove the default DCS World Server shortcut placed by the installer ──
+    foreach ($name in @("DCS World Server", "DCS World OpenBeta Server")) {
+        $lnk = "$desktop\$name.lnk"
+        if (Test-Path $lnk) {
+            Remove-Item $lnk -Force
+            Write-Ok "Removed default shortcut: $name.lnk"
+        }
+    }
 
     # ── Start <InstanceName> ──────────────────────────────────────────────────
     $startLnkPath = "$desktop\Start $InstanceName.lnk"
@@ -656,6 +676,7 @@ if ($createShortcuts -eq "" -or $createShortcuts -match "^[Yy]") {
     $startLnk.Arguments   = "/c schtasks /run /tn `"$ServiceName`""
     $startLnk.WindowStyle = 7  # minimised — no console flash
     $startLnk.Description = "Start $InstanceName via Task Scheduler (bot-managed)"
+    if (Test-Path $dcsIco) { $startLnk.IconLocation = "$dcsIco,0" }
     $startLnk.Save()
     Write-Ok "Created: Start $InstanceName.lnk"
 
@@ -678,6 +699,7 @@ Invoke-WebRequest -UseBasicParsing $OrchestratorUrl/install/install.ps1 -OutFile
     $updateLnk.Arguments   = "-NoProfile -ExecutionPolicy Bypass -File `"$updateHelper`""
     $updateLnk.WindowStyle = 1
     $updateLnk.Description = "Update DCS Agent to the latest version"
+    if (Test-Path $dcsIco) { $updateLnk.IconLocation = "$dcsIco,0" }
     $updateLnk.Save()
     # Set the Run as Administrator flag (byte 0x15, bit 0x20 of the .lnk header)
     $lnkBytes = [System.IO.File]::ReadAllBytes($updateLnkPath)
