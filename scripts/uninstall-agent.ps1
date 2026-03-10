@@ -47,7 +47,7 @@ if ($confirm -notmatch "^[Yy]") {
     exit 0
 }
 
-# ── 1. Stop and remove NSSM services ──────────────────────────────────────────
+# --- 1. Stop and remove NSSM services ---------------------------------------
 
 Write-Step "Stopping and removing DCS Agent services"
 
@@ -66,11 +66,11 @@ foreach ($svc in @("DCSAgent", "DCSAgentFrpc")) {
             Write-Ok "$svc stopped and deleted via sc.exe"
         }
     } else {
-        Write-Warn "$svc not found — skipping"
+        Write-Warn "$svc not found -- skipping"
     }
 }
 
-# ── 2. Remove Task Scheduler tasks ────────────────────────────────────────────
+# --- 2. Remove Task Scheduler tasks -----------------------------------------
 
 Write-Step "Removing Task Scheduler tasks"
 
@@ -80,7 +80,7 @@ Write-Ok "Task '$ServiceName' removed (if it existed)"
 try { schtasks /delete /tn "DCS-UpdateDCS" /f 2>&1 | Out-Null } catch { }
 Write-Ok "Task 'DCS-UpdateDCS' removed (if it existed)"
 
-# ── 3. Remove Lua hook from all DCS Saved Games profiles ──────────────────────
+# --- 3. Remove Lua hook from all DCS Saved Games profiles -------------------
 
 Write-Step "Removing DCS Lua hook"
 
@@ -96,7 +96,7 @@ Get-ChildItem $savedGamesBase -Directory -Filter "DCS*" -ErrorAction SilentlyCon
 }
 if ($hooked -eq 0) { Write-Warn "No hook files found" }
 
-# ── 4. Delete install directory ───────────────────────────────────────────────
+# --- 4. Delete install directory --------------------------------------------
 
 Write-Step "Deleting install directory: $InstallDir"
 
@@ -104,10 +104,10 @@ if (Test-Path $InstallDir) {
     Remove-Item $InstallDir -Recurse -Force
     Write-Ok "Deleted $InstallDir"
 } else {
-    Write-Warn "$InstallDir not found — already removed?"
+    Write-Warn "$InstallDir not found -- already removed?"
 }
 
-# ── Done ──────────────────────────────────────────────────────────────────────
+# --- Done -------------------------------------------------------------------
 
 Write-Host ""
 Write-Host "============================================================" -ForegroundColor Green
@@ -115,5 +115,5 @@ Write-Host "   DCS Agent uninstalled." -ForegroundColor Green
 Write-Host "============================================================" -ForegroundColor Green
 Write-Host ""
 Write-Host "  NOTE: Your DCS Saved Games profile and missions are untouched." -ForegroundColor Yellow
-Write-Host "  To fully remove the host from Discord, ask an admin to run /dcs remove-host." -ForegroundColor Yellow
+Write-Host "  To remove the host from Discord, ask an admin to run /dcs remove-host." -ForegroundColor Yellow
 Write-Host ""
