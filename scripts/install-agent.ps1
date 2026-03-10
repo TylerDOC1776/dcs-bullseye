@@ -37,7 +37,7 @@ param(
     [Parameter(ParameterSetName = "Update")]
     [switch]$Update,
 
-    [string]$OrchestratorUrl = "",
+    [string]$OrchestratorUrl = "##ORCHESTRATOR_URL##",
 
     [string]$AgentZipSha256 = "",
 
