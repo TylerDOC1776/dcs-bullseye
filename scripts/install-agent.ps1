@@ -75,10 +75,10 @@ function Write-Fail { param([string]$Msg) Write-Host "    FAIL: $Msg"  -Foregrou
 function Get-OrchestratorError([System.Management.Automation.ErrorRecord]$Err) {
     try {
         $body = $Err.ErrorDetails.Message | ConvertFrom-Json
-        return if ($body.detail) { $body.detail } else { $body.title }
-    } catch {
-        return $Err.Exception.Message
-    }
+        if ($body.detail) { return $body.detail }
+        if ($body.title)  { return $body.title }
+    } catch { }
+    return $Err.Exception.Message
 }
 
 function Download-File([string]$Url, [string]$Dest) {
