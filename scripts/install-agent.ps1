@@ -608,13 +608,28 @@ if (Test-Path $hookSrc) {
 # ══════════════════════════════════════════════════════════════════════════════
 Write-Step "Starting services"
 
-Start-Service DCSAgentFrpc
-Write-Ok "DCSAgentFrpc started (tunnel connecting to $($reg.frpServerAddr):$($reg.frpServerPort))"
+try {
+    Start-Service DCSAgentFrpc
+    Write-Ok "DCSAgentFrpc started (tunnel connecting to $($reg.frpServerAddr):$($reg.frpServerPort))"
+} catch {
+    Write-Warn "DCSAgentFrpc failed to start — check log: $InstallDir\logs\frpc.log"
+}
 
 Start-Sleep -Seconds 2
 
-Start-Service DCSAgent
-Write-Ok "DCSAgent started (listening on port 8787)"
+try {
+    Start-Service DCSAgent
+    Write-Ok "DCSAgent started (listening on port 8787)"
+} catch {
+    Write-Warn "DCSAgent failed to start — check log: $InstallDir\logs\agent.log"
+    Write-Host ""
+    Write-Host "  Last 20 lines of agent log:" -ForegroundColor Yellow
+    if (Test-Path "$InstallDir\logs\agent.log") {
+        Get-Content "$InstallDir\logs\agent.log" -Tail 20 | ForEach-Object { Write-Host "    $_" }
+    } else {
+        Write-Host "    (log file not found — service may have failed before writing output)" -ForegroundColor DarkGray
+    }
+}
 
 # ══════════════════════════════════════════════════════════════════════════════
 # 18. Create desktop shortcuts (optional)
