@@ -666,6 +666,19 @@ class DcsController:
             raise FileNotFoundError(f"Mission not found: {mission_path}")
         mission_path.unlink()
 
+    def copy_mission_to_active(self, instance: InstanceConfig, filename: str) -> dict:
+        """Copy a .miz from the instance's missions_dir into active_missions_dir."""
+        active_dir = self._config.active_missions_dir
+        if not active_dir:
+            raise ValueError("active_missions_dir not configured")
+        src = Path(instance.missions_dir) / filename
+        if not src.exists():
+            raise FileNotFoundError(f"Mission not found: {src}")
+        dest = Path(active_dir) / filename
+        import shutil
+        shutil.copy2(src, dest)
+        return {"filename": filename, "path": str(dest), "size_bytes": dest.stat().st_size}
+
     def upload_active_mission(self, filename: str, data: bytes) -> dict:
         """Save uploaded bytes to active_missions_dir root."""
         active_dir = self._config.active_missions_dir

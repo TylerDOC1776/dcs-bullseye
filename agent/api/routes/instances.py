@@ -171,6 +171,26 @@ async def delete_mission(instanceId: str, filename: str, request: Request) -> Re
     return Response(status_code=204)
 
 
+@router.post("/instances/{instanceId}/missions/{filename}/copy-to-active")
+async def copy_mission_to_active(instanceId: str, filename: str, request: Request) -> dict:
+    """Copy a .miz from the instance's missions_dir into active_missions_dir."""
+    config = request.app.state.config
+    ctrl: DcsController = request.app.state.controller
+    inst = find_instance(config, instanceId)
+    try:
+        filename = sanitize_miz_filename(filename)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    loop = asyncio.get_running_loop()
+    try:
+        result = await loop.run_in_executor(None, ctrl.copy_mission_to_active, inst, filename)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return result
+
+
 @router.get("/missions")
 async def list_active_missions(request: Request) -> dict:
     """List .miz files in the root of active_missions_dir (not subfolders)."""

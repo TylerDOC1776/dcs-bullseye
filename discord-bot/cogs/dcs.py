@@ -1622,6 +1622,70 @@ class DcsCog(commands.Cog):
             )
 
         # ---------------------------------------------------------------- #
+        # /dcs copy-mission                                                  #
+        # ---------------------------------------------------------------- #
+
+        async def _all_instance_missions_autocomplete(
+            interaction: discord.Interaction,
+            current: str,
+        ) -> list[app_commands.Choice[str]]:
+            """Autocomplete across every instance's Missions folder on every host.
+            Value format: '<instance_id>::<filename>' so we know the source."""
+            try:
+                instances = await client.list_instances()
+            except Exception:
+                return []
+            low = current.lower()
+            choices: list[app_commands.Choice[str]] = []
+            for inst in instances:
+                try:
+                    items = await client.list_missions(inst["id"])
+                except Exception:
+                    continue
+                for filename in items:
+                    if low and low not in filename.lower():
+                        continue
+                    label = f"{inst['name']} › {filename}"
+                    choices.append(app_commands.Choice(name=label[:100], value=f"{inst['id']}::{filename}"))
+                    if len(choices) >= 25:
+                        return choices
+            return choices
+
+        @self.dcs.command(name="copy-mission", description="Copy a mission from any server's Missions folder into the shared Active Missions library")
+        @app_commands.describe(source="Server and mission file to copy (type to search)")
+        @app_commands.autocomplete(source=_all_instance_missions_autocomplete)
+        async def cmd_copy_mission(interaction: discord.Interaction, source: str) -> None:
+            if not await _check_channel(interaction):
+                return
+            if not await _require_operator(interaction):
+                return
+
+            if "::" not in source:
+                await interaction.response.send_message(
+                    "Please select a mission from the autocomplete list.", ephemeral=True
+                )
+                return
+
+            instance_id, filename = source.split("::", 1)
+            await interaction.response.defer()
+
+            try:
+                result = await client.copy_mission_to_active(instance_id, filename)
+            except OrchestratorError as exc:
+                await interaction.followup.send(
+                    f"Failed to copy `{filename}`: {exc.detail}", ephemeral=True
+                )
+                return
+
+            embed = discord.Embed(
+                title="Mission Copied to Active Library",
+                description=f"`{filename}` is now available in the Active Missions folder.",
+                colour=0x2ECC71,
+            )
+            embed.add_field(name="Size", value=f"{result.get('size_bytes', 0) // 1024} KB", inline=True)
+            await interaction.followup.send(embed=embed)
+
+        # ---------------------------------------------------------------- #
         # /dcs remove-host                                                   #
         # ---------------------------------------------------------------- #
 

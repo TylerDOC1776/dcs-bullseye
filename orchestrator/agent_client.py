@@ -184,6 +184,10 @@ class AgentClient:
         """DELETE /agent/v1/instances/{serviceName}/missions/{filename}"""
         await self._delete(f"/instances/{service_name}/missions/{filename}")
 
+    async def copy_mission_to_active(self, service_name: str, filename: str) -> dict[str, Any]:
+        """POST /agent/v1/instances/{serviceName}/missions/{filename}/copy-to-active"""
+        return await self._post(f"/instances/{service_name}/missions/{filename}/copy-to-active")
+
     async def list_active_missions(self) -> list[dict[str, Any]]:
         """GET /agent/v1/missions — list the shared Active Missions folder (root only)."""
         data = await self._get("/missions")
