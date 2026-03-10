@@ -516,7 +516,7 @@ $tmpXml = [System.IO.Path]::GetTempFileName() + ".xml"
 [System.IO.File]::WriteAllText($tmpXml, $taskXml, [System.Text.Encoding]::Unicode)
 
 # Remove existing task if present
-schtasks /delete /tn $ServiceName /f 2>&1 | Out-Null
+try { schtasks /delete /tn $ServiceName /f 2>&1 | Out-Null } catch { }
 
 schtasks /create /tn $ServiceName /xml $tmpXml /f | Out-Null
 Remove-Item $tmpXml -ErrorAction SilentlyContinue
@@ -568,7 +568,7 @@ $updateTaskXml = @"
 
 $tmpUpdateXml = [System.IO.Path]::GetTempFileName() + ".xml"
 [System.IO.File]::WriteAllText($tmpUpdateXml, $updateTaskXml, [System.Text.Encoding]::Unicode)
-schtasks /delete /tn "DCS-UpdateDCS" /f 2>&1 | Out-Null
+try { schtasks /delete /tn "DCS-UpdateDCS" /f 2>&1 | Out-Null } catch { }
 schtasks /create /tn "DCS-UpdateDCS" /xml $tmpUpdateXml /f | Out-Null
 Remove-Item $tmpUpdateXml -ErrorAction SilentlyContinue
 Write-Ok "DCS-UpdateDCS task created (runs as SYSTEM)"
