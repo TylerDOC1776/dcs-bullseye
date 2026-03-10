@@ -94,6 +94,14 @@ async def patch_host(hostId: str, body: HostPatch, request: Request) -> Host:
     return _row_to_host(row)
 
 
+@router.delete("/hosts/{hostId}", status_code=204)
+async def delete_host(hostId: str, request: Request) -> None:
+    db: Database = request.app.state.db
+    deleted = await db.delete_host(hostId)
+    if not deleted:
+        raise HTTPException(status_code=404, detail=f"Host {hostId!r} not found")
+
+
 @router.get("/hosts/{hostId}/health", response_model=Health)
 async def get_host_health(hostId: str, request: Request) -> Health:
     db: Database = request.app.state.db

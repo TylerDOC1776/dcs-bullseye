@@ -188,6 +188,13 @@ class Database:
         await self._conn.commit()
         return await self.get_host(host_id)
 
+    async def delete_host(self, host_id: str) -> bool:
+        assert self._conn
+        await self._conn.execute("DELETE FROM instances WHERE host_id = ?", (host_id,))
+        cur = await self._conn.execute("DELETE FROM hosts WHERE id = ?", (host_id,))
+        await self._conn.commit()
+        return (cur.rowcount or 0) > 0
+
     async def touch_host(self, host_id: str) -> None:
         assert self._conn
         await self._conn.execute(

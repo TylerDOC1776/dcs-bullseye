@@ -1622,6 +1622,51 @@ class DcsCog(commands.Cog):
             )
 
         # ---------------------------------------------------------------- #
+        # /dcs remove-host                                                   #
+        # ---------------------------------------------------------------- #
+
+        @self.dcs.command(name="remove-host", description="Remove a community host and all its instances from the platform")
+        @app_commands.describe(host="Host to remove")
+        @app_commands.autocomplete(host=_host_autocomplete)
+        async def cmd_remove_host(interaction: discord.Interaction, host: str) -> None:
+            if not await _check_channel(interaction):
+                return
+            if not await _require_admin(interaction):
+                return
+
+            view = _ConfirmView(label="Confirm Remove")
+            await interaction.response.send_message(
+                f"Remove host **{host}** and all its instances from the platform?\n"
+                "This cannot be undone — the host will need a new invite code to re-register.",
+                view=view,
+                ephemeral=True,
+            )
+            await view.wait()
+            if not view.confirmed:
+                await interaction.edit_original_response(content="Cancelled.", view=None)
+                return
+
+            await interaction.edit_original_response(content="Removing host…", view=None)
+            try:
+                hosts = await client.list_hosts()
+                matched = next((h for h in hosts if h["name"] == host), None)
+                if not matched:
+                    await interaction.edit_original_response(
+                        content=f"Host `{host}` not found.", view=None
+                    )
+                    return
+                await client.remove_host(matched["id"])
+            except OrchestratorError as exc:
+                await interaction.edit_original_response(
+                    content=f"Failed to remove host: {exc.detail}", view=None
+                )
+                return
+
+            await interaction.edit_original_response(
+                content=f"Host **{host}** has been removed.", view=None
+            )
+
+        # ---------------------------------------------------------------- #
         # /dcs register                                                      #
         # ---------------------------------------------------------------- #
 
