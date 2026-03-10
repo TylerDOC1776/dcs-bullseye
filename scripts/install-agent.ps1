@@ -458,7 +458,7 @@ if ($existing) {
 }
 
 & $nssm install DCSAgent $python
-& $nssm set DCSAgent AppParameters "-m agent serve --config `"$agentCfgPath`""
+& $nssm set DCSAgent AppParameters "-m agent --config `"$agentCfgPath`" serve"
 & $nssm set DCSAgent AppDirectory "$InstallDir\src"
 & $nssm set DCSAgent Description "DCS World Agent API"
 & $nssm set DCSAgent Start SERVICE_AUTO_START
