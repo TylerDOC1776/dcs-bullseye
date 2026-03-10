@@ -1,4 +1,4 @@
-#Requires -RunAsAdministrator
+﻿#Requires -RunAsAdministrator
 <#
 .SYNOPSIS
     DCS Platform community host installer.
@@ -63,7 +63,7 @@ if (-not $OrchestratorUrl.StartsWith("https://")) {
 $ORCHESTRATOR  = $OrchestratorUrl
 $FRPC_VERSION  = "0.61.0"
 $FRPC_ZIP_URL  = "https://github.com/fatedier/frp/releases/download/v$FRPC_VERSION/frp_${FRPC_VERSION}_windows_amd64.zip"
-$NSSM_ZIP_URL  = "https://nssm.cc/release/nssm-2.24.zip"
+$NSSM_ZIP_URL  = "$OrchestratorUrl/install/nssm.zip"
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -131,12 +131,12 @@ if ($Update) {
     Remove-Item $agentZip -ErrorAction SilentlyContinue
 
     Write-Step "Installing/updating Python dependencies"
-    $pip = "$InstallDirenv\Scripts\pip.exe"
+    $pip = "$InstallDir\venv\Scripts\pip.exe"
     if (Test-Path $pip) {
-        & $pip install --quiet --upgrade -r "$InstallDir\srcequirements.txt"
+        & $pip install --quiet --upgrade -r "$InstallDir\src\requirements.txt"
         Write-Ok "Dependencies updated"
     } else {
-        Write-Warn "venv not found at $InstallDirenv — skipping pip install"
+        Write-Warn "venv not found at $InstallDir\venv — skipping pip install"
     }
 
     Write-Step "Starting DCSAgent service"
@@ -198,8 +198,8 @@ Write-Ok "DCS_server.exe: $dcsExe"
 Write-Step "Locating DCS Saved Games server profile"
 
 $savedGamesBase = "$env:USERPROFILE\Saved Games"
-$dcsProfiles = Get-ChildItem $savedGamesBase -Directory -Filter "DCS*" -ErrorAction SilentlyContinue |
-    Where-Object { Test-Path (Join-Path $_.FullName "Config\serverSettings.lua") }
+$dcsProfiles = @(Get-ChildItem $savedGamesBase -Directory -Filter "DCS*" -ErrorAction SilentlyContinue |
+    Where-Object { Test-Path (Join-Path $_.FullName "Config\serverSettings.lua") })
 
 $savedGamesKey  = $null
 $savedGamesPath = $null
@@ -309,7 +309,7 @@ $pip      = "$venvDir\Scripts\pip.exe"
 $python   = "$venvDir\Scripts\python.exe"
 
 & $pyCmd -m venv $venvDir
-& $pip install --quiet --upgrade pip
+& $python -m pip install --quiet --upgrade pip
 & $pip install --quiet -r "$InstallDir\src\requirements.txt"
 Write-Ok "venv ready: $venvDir"
 
