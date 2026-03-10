@@ -254,6 +254,16 @@ Write-Ok "            API key   : $($reg.agentApiKey.Substring(0,8))..."
 # ══════════════════════════════════════════════════════════════════════════════
 # 4. Create install directory structure
 # ══════════════════════════════════════════════════════════════════════════════
+Write-Step "Stopping existing services (if any)"
+
+foreach ($svc in @("DCSAgent", "DCSAgentFrpc")) {
+    if (Get-Service -Name $svc -ErrorAction SilentlyContinue) {
+        Write-Warn "$svc is running — stopping before reinstall"
+        try { Stop-Service $svc -Force 2>&1 | Out-Null } catch { }
+        Start-Sleep -Seconds 1
+    }
+}
+
 Write-Step "Creating install directory: $InstallDir"
 
 foreach ($d in @($InstallDir, "$InstallDir\logs", "$InstallDir\src")) {
