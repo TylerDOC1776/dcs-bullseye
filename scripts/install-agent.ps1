@@ -397,7 +397,7 @@ $agentCfg = [ordered]@{
 } | ConvertTo-Json -Depth 5
 
 $agentCfgPath = "$InstallDir\config.json"
-$agentCfg | Set-Content -Path $agentCfgPath -Encoding UTF8
+[System.IO.File]::WriteAllText($agentCfgPath, $agentCfg, [System.Text.UTF8Encoding]::new($false))
 Write-Ok "config.json written"
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -421,7 +421,7 @@ localPort = 8787
 remotePort = $($reg.frpRemotePort)
 "@
 
-$frpcToml | Set-Content -Path "$InstallDir\frpc.toml" -Encoding UTF8
+[System.IO.File]::WriteAllText("$InstallDir\frpc.toml", $frpcToml, [System.Text.UTF8Encoding]::new($false))
 Write-Ok "frpc.toml written"
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -636,7 +636,7 @@ if ($createShortcuts -eq "" -or $createShortcuts -match "^[Yy]") {
 Invoke-WebRequest -UseBasicParsing $OrchestratorUrl/install/install.ps1 -OutFile `$f
 & powershell -ExecutionPolicy Bypass -File `$f -Update -OrchestratorUrl $OrchestratorUrl
 "@
-    $updateHelperContent | Set-Content -Path $updateHelper -Encoding UTF8
+    [System.IO.File]::WriteAllText($updateHelper, $updateHelperContent, [System.Text.UTF8Encoding]::new($false))
 
     $updateLnkPath = "$desktop\Update DCS Agent.lnk"
     $updateLnk = $wsh.CreateShortcut($updateLnkPath)
