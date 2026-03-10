@@ -433,8 +433,8 @@ Write-Step "Installing DCSAgent service"
 $existing = Get-Service -Name "DCSAgent" -ErrorAction SilentlyContinue
 if ($existing) {
     Write-Warn "DCSAgent service already exists — removing and reinstalling"
-    & $nssm stop DCSAgent 2>$null
-    & $nssm remove DCSAgent confirm 2>$null
+    & $nssm stop DCSAgent 2>&1 | Out-Null
+    & $nssm remove DCSAgent confirm 2>&1 | Out-Null
     Start-Sleep -Seconds 1
 }
 
@@ -457,8 +457,8 @@ Write-Step "Installing DCSAgentFrpc tunnel service"
 $existingFrpc = Get-Service -Name "DCSAgentFrpc" -ErrorAction SilentlyContinue
 if ($existingFrpc) {
     Write-Warn "DCSAgentFrpc service already exists — removing and reinstalling"
-    & $nssm stop DCSAgentFrpc 2>$null
-    & $nssm remove DCSAgentFrpc confirm 2>$null
+    & $nssm stop DCSAgentFrpc 2>&1 | Out-Null
+    & $nssm remove DCSAgentFrpc confirm 2>&1 | Out-Null
     Start-Sleep -Seconds 1
 }
 
