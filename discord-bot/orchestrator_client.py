@@ -177,6 +177,12 @@ class OrchestratorClient:
         self._raise_for_status(resp)
         return resp.json()
 
+    async def copy_mission_to_active(self, instance_id: str, filename: str) -> dict:
+        return await self._post(f"/instances/{instance_id}/missions/{filename}/copy-to-active")
+
+    async def remove_host(self, host_id: str) -> None:
+        await self._delete(f"/hosts/{host_id}")
+
     async def reboot_host(self, host_id: str) -> dict:
         return await self._post(f"/hosts/{host_id}/reboot")
 

@@ -196,8 +196,22 @@ def _dedup_blocks(blocks: list[list[str]]) -> list[str]:
 # Task Scheduler helpers (for instances with manager="task")
 # ------------------------------------------------------------------
 
+def _kill_any_dcs_server() -> None:
+    """Kill all DCS_server.exe processes regardless of how they were started.
+
+    Prevents port conflicts when a user has DCS running via a desktop shortcut
+    (without -w flag) at the same time the agent tries to start it via Task Scheduler.
+    """
+    subprocess.run(
+        ["powershell", "-NoProfile", "-Command",
+         "Get-Process DCS_server -ErrorAction SilentlyContinue | Stop-Process -Force"],
+        capture_output=True, text=True,
+    )
+
+
 def _task_start(task_name: str) -> None:
     """Start a Windows Task Scheduler task by name."""
+    _kill_any_dcs_server()
     result = subprocess.run(
         ["schtasks", "/run", "/tn", task_name],
         capture_output=True, text=True,
@@ -523,7 +537,7 @@ class DcsController:
         Update serverSettings.lua to load *mission_file*, then restart the service.
 
         mission_file may be:
-          - A bare filename resolved against instance.missions_dir
+          - A bare filename resolved against instance.missions_dir, then active_missions_dir
           - An absolute path (e.g. from active_missions_dir)
 
         Returns the absolute path of the mission that was set.
@@ -534,6 +548,11 @@ class DcsController:
             mission_path = candidate
         else:
             mission_path = missions_dir / mission_file
+            # Also check active_missions_dir for bare filenames
+            if not mission_path.exists() and self._config.active_missions_dir:
+                active_path = Path(self._config.active_missions_dir) / mission_file
+                if active_path.exists():
+                    mission_path = active_path
 
         if mission_path.suffix.lower() != ".miz":
             raise ValueError(f"Not a .miz file: {mission_file!r}")
@@ -652,16 +671,27 @@ class DcsController:
             raise FileNotFoundError(f"Mission not found: {mission_path}")
         mission_path.unlink()
 
+    def copy_mission_to_active(self, instance: InstanceConfig, filename: str) -> dict:
+        """Copy a .miz from the instance's missions_dir into active_missions_dir."""
+        active_dir = self._config.active_missions_dir
+        if not active_dir:
+            raise ValueError("active_missions_dir not configured")
+        src = Path(instance.missions_dir) / filename
+        if not src.exists():
+            raise FileNotFoundError(f"Mission not found: {src}")
+        dest = Path(active_dir) / filename
+        import shutil
+        shutil.copy2(src, dest)
+        return {"filename": filename, "path": str(dest), "size_bytes": dest.stat().st_size}
+
     def upload_active_mission(self, filename: str, data: bytes) -> dict:
-        """Save uploaded bytes to active_missions_dir root."""
+        """Save uploaded bytes to active_missions_dir root, overwriting any existing file."""
         active_dir = self._config.active_missions_dir
         if not active_dir:
             raise ValueError("active_missions_dir not configured")
         dest_dir = Path(active_dir)
         dest_dir.mkdir(parents=True, exist_ok=True)
         dest = dest_dir / filename
-        if dest.exists():
-            raise FileExistsError(f"A file named {filename!r} already exists in Active Missions")
         dest.write_bytes(data)
         return {"path": str(dest), "filename": filename, "size": len(data)}
 

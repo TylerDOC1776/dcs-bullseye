@@ -210,6 +210,24 @@ async def list_instance_missions(instanceId: str, request: Request) -> dict:
     return {"items": items}
 
 
+@router.post("/instances/{instanceId}/missions/{filename}/copy-to-active")
+async def copy_instance_mission_to_active(instanceId: str, filename: str, request: Request) -> dict:
+    """Copy a .miz from the instance's missions folder into the shared Active Missions folder."""
+    db: Database = request.app.state.db
+    inst_row = await _get_instance_or_404(db, instanceId)
+
+    host_row = await db.get_host(inst_row["host_id"])
+    if host_row is None:
+        raise HTTPException(status_code=404, detail=f"Host {inst_row['host_id']!r} not found")
+
+    agent_base = host_row["agent_url"].rstrip("/") + "/agent/v1"
+    try:
+        async with AgentClient(agent_base, host_row["agent_api_key"]) as client:
+            return await client.copy_mission_to_active(inst_row["service_name"], filename)
+    except AgentError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail)
+
+
 @router.delete("/instances/{instanceId}/missions/{filename}", status_code=204)
 async def delete_instance_mission(instanceId: str, filename: str, request: Request) -> Response:
     """Proxy a mission delete request to the agent."""

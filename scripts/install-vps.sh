@@ -84,8 +84,11 @@ build_agent_zip() {
 }
 
 copy_install_script() {
-    cp "${REPO_DIR}/scripts/install-agent.ps1" "${INSTALL_STATIC}/install.ps1"
-    ok "install.ps1 copied to ${INSTALL_STATIC}/"
+    # Inject the VPS orchestrator URL as the default parameter value so users
+    # don't need to pass -OrchestratorUrl when running the downloaded script.
+    sed "s|##ORCHESTRATOR_URL##|${ORCHESTRATOR_URL}|g" \
+        "${REPO_DIR}/scripts/install-agent.ps1" > "${INSTALL_STATIC}/install.ps1"
+    ok "install.ps1 copied to ${INSTALL_STATIC}/ (URL: ${ORCHESTRATOR_URL})"
 }
 
 # ── Argument parsing ──────────────────────────────────────────────────────────

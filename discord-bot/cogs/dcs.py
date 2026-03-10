@@ -614,23 +614,56 @@ class DcsCog(commands.Cog):
             interaction: discord.Interaction,
             current: str,
         ) -> list[app_commands.Choice[str]]:
-            """Autocomplete from the shared Active Missions folder on the first host."""
+            """Autocomplete across all hosts' Active Missions folders, sorted by play count.
+            Value format: '<host_id>::<filename>'"""
             try:
                 hosts = await client.list_hosts()
-                if not hosts:
-                    return []
-                host_id = hosts[0]["id"]
-                items = await client.list_active_missions(host_id)
             except Exception:
                 return []
+
+            # Build play-count map from analytics
+            play_counts: dict[str, int] = {}
+            try:
+                events = await client.get_analytics_events(limit=1000)
+                for e in events:
+                    if e.get("event_type") == "mission_start" and e.get("mission_name"):
+                        stem = e["mission_name"]
+                        play_counts[stem] = play_counts.get(stem, 0) + 1
+            except Exception:
+                pass
+
             low = current.lower()
-            choices = []
-            for m in items:
-                rel = m.get("relative_path", m.get("name", ""))
-                if low in rel.lower():
-                    # Show relative_path as label (preserves subfolder context), full path as value
-                    choices.append(app_commands.Choice(name=rel[:100], value=m["path"]))
-            return choices[:25]
+            seen: set[str] = set()
+            candidates: list[tuple[int, str, str]] = []  # (play_count, label, value)
+            for host in hosts:
+                try:
+                    items = await client.list_active_missions(host["id"])
+                except Exception:
+                    continue
+                for m in items:
+                    filename = m.get("relative_path", m.get("name", ""))
+                    if not filename:
+                        continue
+                    if low and low not in filename.lower():
+                        continue
+                    if filename in seen:
+                        continue
+                    seen.add(filename)
+                    stem = filename[:-4] if filename.lower().endswith(".miz") else filename
+                    count = play_counts.get(stem, 0)
+                    label = filename
+                    if count:
+                        label += f" ({count}\u00d7)"
+                    candidates.append((count, label, f"{host['id']}::{filename}"))
+
+            candidates.sort(key=lambda x: -x[0])
+            choices = [app_commands.Choice(name=c[1][:100], value=c[2]) for c in candidates[:24]]
+            if len(candidates) > 24:
+                choices.append(app_commands.Choice(
+                    name=f"... {len(candidates) - 24} more — type to search",
+                    value="__hint__",
+                ))
+            return choices
 
         # ---- job poller -------------------------------------------- #
 
@@ -903,32 +936,51 @@ class DcsCog(commands.Cog):
         @self.dcs.command(name="mission", description="Load a mission file and restart the server")
         @app_commands.describe(
             instance="Instance to load the mission on",
-            mission_file="Mission to load (autocomplete from Active Missions folder by default)",
-            source="Where to pick the mission from: 'active' (shared library) or 'instance' (per-server)",
+            mission_file="Mission file (searches Active Missions on all hosts — type to filter)",
         )
         @app_commands.autocomplete(instance=_instance_autocomplete, mission_file=_active_mission_autocomplete)
-        @app_commands.choices(source=[
-            app_commands.Choice(name="active — shared library (default)", value="active"),
-            app_commands.Choice(name="instance — per-server Missions folder", value="instance"),
-        ])
         async def cmd_mission(
             interaction: discord.Interaction,
             instance: str,
             mission_file: str,
-            source: str = "active",
         ) -> None:
             if not await _check_channel(interaction):
                 return
             if not await _require_operator(interaction):
                 return
+
+            if mission_file == "__hint__":
+                await interaction.response.send_message(
+                    "Type part of the mission name to filter, then select from the results.",
+                    ephemeral=True,
+                )
+                return
+
             await interaction.response.defer()
 
-            # If source=instance, re-autocomplete is not involved for the value;
-            # the user types/selects a bare filename against missions_dir.
-            # If source=active, mission_file is already the full absolute path from autocomplete.
             try:
+                # Parse autocomplete value: "<source_host_id>::<filename>"
+                if "::" in mission_file:
+                    source_host_id, filename = mission_file.split("::", 1)
+                else:
+                    # Bare filename typed manually — pass straight through
+                    source_host_id = None
+                    filename = mission_file
+
+                # Determine target host
+                inst_ref = await client.get_instance(instance)
+                target_host_id = inst_ref.get("hostId")
+
+                # Cross-host transfer: download from source, upload to target
+                if source_host_id and target_host_id and source_host_id != target_host_id:
+                    await interaction.followup.send(
+                        f"Fetching `{filename}` from another host — please wait...", ephemeral=True
+                    )
+                    data = await client.download_active_mission(source_host_id, filename)
+                    await client.upload_active_mission(target_host_id, filename, data)
+
                 job_ref = await client.trigger_action(
-                    instance, "mission_load", body={"mission": mission_file},
+                    instance, "mission_load", body={"mission": filename},
                     actor_id=str(interaction.user.id),
                 )
                 job = await _poll_job(job_ref["jobId"])
@@ -939,7 +991,7 @@ class DcsCog(commands.Cog):
                     return
                 embed = _job_embed(job, f"Mission Load: {instance}")
                 if job.get("status") == "succeeded":
-                    loaded = (job.get("result") or {}).get("mission", mission_file)
+                    loaded = (job.get("result") or {}).get("mission", filename)
                     embed.add_field(name="Mission", value=f"`{loaded}`", inline=False)
                 await interaction.followup.send(embed=embed)
             except OrchestratorError as exc:
@@ -1076,26 +1128,6 @@ class DcsCog(commands.Cog):
         # ---------------------------------------------------------------- #
         # /dcs clear                                                        #
         # ---------------------------------------------------------------- #
-
-        # ---------------------------------------------------------------- #
-        # /dcs minimize                                                     #
-        # ---------------------------------------------------------------- #
-
-        @self.dcs.command(name="minimize", description="Minimize all DCS server windows on the host")
-        async def cmd_minimize(interaction: discord.Interaction) -> None:
-            if not await _check_channel(interaction):
-                return
-            if not await _require_operator(interaction):
-                return
-            await interaction.response.defer(ephemeral=True)
-            try:
-                job_ref = await client.trigger_action(
-                    next(iter(await client.list_instances()))["id"], "minimize_window",
-                    actor_id=str(interaction.user.id),
-                )
-                await interaction.followup.send("Minimizing DCS windows...", ephemeral=True)
-            except OrchestratorError as exc:
-                await interaction.followup.send(f"Error: {exc.detail}", ephemeral=True)
 
         # ---------------------------------------------------------------- #
         # /dcs invite [host_name] [expires_in_hours]                        #
@@ -1619,6 +1651,145 @@ class DcsCog(commands.Cog):
                 )
             await interaction.edit_original_response(
                 content="✅ Update triggered. Watch the status channel for progress.", view=None
+            )
+
+        # ---------------------------------------------------------------- #
+        # /dcs copy-mission                                                  #
+        # ---------------------------------------------------------------- #
+
+        async def _all_instance_missions_autocomplete(
+            interaction: discord.Interaction,
+            current: str,
+        ) -> list[app_commands.Choice[str]]:
+            """Autocomplete across every instance's Missions folder on every host.
+            Sorted by most-played (analytics). Adds a search hint when results are capped.
+            Value format: '<instance_id>::<filename>'"""
+            try:
+                instances = await client.list_instances()
+            except Exception:
+                return []
+
+            # Build play-count map from analytics (mission_name = filename stem)
+            play_counts: dict[str, int] = {}
+            try:
+                events = await client.get_analytics_events(limit=1000)
+                for e in events:
+                    if e.get("event_type") == "mission_start" and e.get("mission_name"):
+                        stem = e["mission_name"]
+                        play_counts[stem] = play_counts.get(stem, 0) + 1
+            except Exception:
+                pass
+
+            low = current.lower()
+            candidates: list[tuple[int, str, str]] = []  # (play_count, label, value)
+            for inst in instances:
+                try:
+                    items = await client.list_missions(inst["id"])
+                except Exception:
+                    continue
+                for filename in items:
+                    if low and low not in filename.lower():
+                        continue
+                    stem = filename[:-4] if filename.lower().endswith(".miz") else filename
+                    count = play_counts.get(stem, 0)
+                    label = f"{inst['name']} \u203a {filename}"
+                    if count:
+                        label += f" ({count}\u00d7)"
+                    candidates.append((count, label, f"{inst['id']}::{filename}"))
+
+            candidates.sort(key=lambda x: -x[0])
+
+            choices = [
+                app_commands.Choice(name=c[1][:100], value=c[2])
+                for c in candidates[:24]
+            ]
+
+            if len(candidates) > 24:
+                choices.append(app_commands.Choice(
+                    name=f"... {len(candidates) - 24} more — type a name to search",
+                    value="__hint__",
+                ))
+
+            return choices
+
+        @self.dcs.command(name="copy-mission", description="Copy a mission from any server's Missions folder into the shared Active Missions library")
+        @app_commands.describe(source="Server and mission file to copy (type to search)")
+        @app_commands.autocomplete(source=_all_instance_missions_autocomplete)
+        async def cmd_copy_mission(interaction: discord.Interaction, source: str) -> None:
+            if not await _check_channel(interaction):
+                return
+            if not await _require_operator(interaction):
+                return
+
+            if source == "__hint__" or "::" not in source:
+                await interaction.response.send_message(
+                    "Type part of the mission name to filter the list, then select from the results.",
+                    ephemeral=True,
+                )
+                return
+
+            instance_id, filename = source.split("::", 1)
+            await interaction.response.defer()
+
+            try:
+                result = await client.copy_mission_to_active(instance_id, filename)
+            except OrchestratorError as exc:
+                await interaction.followup.send(
+                    f"Failed to copy `{filename}`: {exc.detail}", ephemeral=True
+                )
+                return
+
+            embed = discord.Embed(
+                title="Mission Copied to Active Library",
+                description=f"`{filename}` is now available in the Active Missions folder.",
+                colour=0x2ECC71,
+            )
+            embed.add_field(name="Size", value=f"{result.get('size_bytes', 0) // 1024} KB", inline=True)
+            await interaction.followup.send(embed=embed)
+
+        # ---------------------------------------------------------------- #
+        # /dcs remove-host                                                   #
+        # ---------------------------------------------------------------- #
+
+        @self.dcs.command(name="remove-host", description="Remove a community host and all its instances from the platform")
+        @app_commands.describe(host="Host to remove")
+        @app_commands.autocomplete(host=_host_autocomplete)
+        async def cmd_remove_host(interaction: discord.Interaction, host: str) -> None:
+            if not await _check_channel(interaction):
+                return
+            if not await _require_admin(interaction):
+                return
+
+            view = _ConfirmView(label="Confirm Remove")
+            await interaction.response.send_message(
+                f"Remove host **{host}** and all its instances from the platform?\n"
+                "This cannot be undone — the host will need a new invite code to re-register.",
+                view=view,
+                ephemeral=True,
+            )
+            await view.wait()
+            if not view.confirmed:
+                await interaction.edit_original_response(content="Cancelled.", view=None)
+                return
+
+            await interaction.edit_original_response(content="Removing host…", view=None)
+            try:
+                hosts = await client.list_hosts()
+                matched = next((h for h in hosts if h["name"] == host), None)
+                if not matched:
+                    await interaction.edit_original_response(
+                        content=f"Host `{host}` not found.", view=None
+                    )
+                    return
+                await client.remove_host(matched["id"])
+            except OrchestratorError as exc:
+                await interaction.edit_original_response(
+                    content=f"Failed to remove host: {exc.detail}", view=None
+                )
+                return
+
+            await interaction.edit_original_response(
+                content=f"Host **{host}** has been removed.", view=None
             )
 
         # ---------------------------------------------------------------- #

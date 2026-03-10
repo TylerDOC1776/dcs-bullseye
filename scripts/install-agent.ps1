@@ -1,4 +1,4 @@
-#Requires -RunAsAdministrator
+﻿#Requires -RunAsAdministrator
 <#
 .SYNOPSIS
     DCS Platform community host installer.
@@ -37,7 +37,7 @@ param(
     [Parameter(ParameterSetName = "Update")]
     [switch]$Update,
 
-    [string]$OrchestratorUrl = "",
+    [string]$OrchestratorUrl = "##ORCHESTRATOR_URL##",
 
     [string]$AgentZipSha256 = "",
 
@@ -54,8 +54,10 @@ $ProgressPreference    = "SilentlyContinue"   # speeds up Invoke-WebRequest down
 # ── Validate orchestrator URL ───────────────────────────────────────────────────
 
 $OrchestratorUrl = $OrchestratorUrl.TrimEnd("/")
-if (-not $OrchestratorUrl.StartsWith("https://")) {
-    throw "OrchestratorUrl must use HTTPS. Received: $OrchestratorUrl"
+while (-not $OrchestratorUrl.StartsWith("https://")) {
+    Write-Host ""
+    Write-Host "  Orchestrator URL is required (e.g. https://goon.gsquad.cc)." -ForegroundColor Yellow
+    $OrchestratorUrl = (Read-Host "  Enter orchestrator URL").Trim().TrimEnd("/")
 }
 
 # ── Constants ──────────────────────────────────────────────────────────────────
@@ -63,7 +65,7 @@ if (-not $OrchestratorUrl.StartsWith("https://")) {
 $ORCHESTRATOR  = $OrchestratorUrl
 $FRPC_VERSION  = "0.61.0"
 $FRPC_ZIP_URL  = "https://github.com/fatedier/frp/releases/download/v$FRPC_VERSION/frp_${FRPC_VERSION}_windows_amd64.zip"
-$NSSM_ZIP_URL  = "https://nssm.cc/release/nssm-2.24.zip"
+$NSSM_ZIP_URL  = "$OrchestratorUrl/install/nssm.zip"
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -75,10 +77,10 @@ function Write-Fail { param([string]$Msg) Write-Host "    FAIL: $Msg"  -Foregrou
 function Get-OrchestratorError([System.Management.Automation.ErrorRecord]$Err) {
     try {
         $body = $Err.ErrorDetails.Message | ConvertFrom-Json
-        return if ($body.detail) { $body.detail } else { $body.title }
-    } catch {
-        return $Err.Exception.Message
-    }
+        if ($body.detail) { return $body.detail }
+        if ($body.title)  { return $body.title }
+    } catch { }
+    return $Err.Exception.Message
 }
 
 function Download-File([string]$Url, [string]$Dest) {
@@ -131,12 +133,20 @@ if ($Update) {
     Remove-Item $agentZip -ErrorAction SilentlyContinue
 
     Write-Step "Installing/updating Python dependencies"
-    $pip = "$InstallDirenv\Scripts\pip.exe"
+    $pip = "$InstallDir\venv\Scripts\pip.exe"
     if (Test-Path $pip) {
-        & $pip install --quiet --upgrade -r "$InstallDir\srcequirements.txt"
+        & $pip install --quiet --upgrade -r "$InstallDir\src\agent\requirements.txt"
+        if ($LASTEXITCODE -ne 0) { throw "pip install failed (exit $LASTEXITCODE)" }
         Write-Ok "Dependencies updated"
     } else {
-        Write-Warn "venv not found at $InstallDirenv — skipping pip install"
+        Write-Warn "venv not found at $InstallDir\venv — skipping pip install"
+    }
+
+    # Copy helper scripts to install root (used by Task Scheduler tasks)
+    $updateScriptSrc = "$InstallDir\src\agent\scripts\update_DCS_auto.ps1"
+    if (Test-Path $updateScriptSrc) {
+        Copy-Item $updateScriptSrc "$InstallDir\update_DCS_auto.ps1" -Force
+        Write-Ok "update_DCS_auto.ps1 updated"
     }
 
     Write-Step "Starting DCSAgent service"
@@ -157,6 +167,15 @@ if (-not $HostName) {
     Write-Host "  (e.g. 'DOC's Server', 'East Coast BBQ', 'MySquadron Host')" -ForegroundColor DarkGray
     $HostName = (Read-Host "  Host name").Trim()
     if (-not $HostName) { $HostName = $env:COMPUTERNAME }
+}
+
+# Prompt for the instance/server name if still the default
+if ($InstanceName -eq "Community Server") {
+    Write-Host ""
+    Write-Host "  What is the name of your DCS server instance?" -ForegroundColor Cyan
+    Write-Host "  (shown in Discord commands like /dcs start — e.g. 'MySquadron Server')" -ForegroundColor DarkGray
+    $typed = (Read-Host "  Instance name").Trim()
+    if ($typed) { $InstanceName = $typed }
 }
 
 Write-Host " Invite code : $InviteCode"
@@ -198,8 +217,8 @@ Write-Ok "DCS_server.exe: $dcsExe"
 Write-Step "Locating DCS Saved Games server profile"
 
 $savedGamesBase = "$env:USERPROFILE\Saved Games"
-$dcsProfiles = Get-ChildItem $savedGamesBase -Directory -Filter "DCS*" -ErrorAction SilentlyContinue |
-    Where-Object { Test-Path (Join-Path $_.FullName "Config\serverSettings.lua") }
+$dcsProfiles = @(Get-ChildItem $savedGamesBase -Directory -Filter "DCS*" -ErrorAction SilentlyContinue |
+    Where-Object { Test-Path (Join-Path $_.FullName "Config\serverSettings.lua") })
 
 $savedGamesKey  = $null
 $savedGamesPath = $null
@@ -254,6 +273,16 @@ Write-Ok "            API key   : $($reg.agentApiKey.Substring(0,8))..."
 # ══════════════════════════════════════════════════════════════════════════════
 # 4. Create install directory structure
 # ══════════════════════════════════════════════════════════════════════════════
+Write-Step "Stopping existing services (if any)"
+
+foreach ($svc in @("DCSAgent", "DCSAgentFrpc")) {
+    if (Get-Service -Name $svc -ErrorAction SilentlyContinue) {
+        Write-Warn "$svc is running — stopping before reinstall"
+        try { Stop-Service $svc -Force 2>&1 | Out-Null } catch { }
+        Start-Sleep -Seconds 1
+    }
+}
+
 Write-Step "Creating install directory: $InstallDir"
 
 foreach ($d in @($InstallDir, "$InstallDir\logs", "$InstallDir\src")) {
@@ -274,13 +303,27 @@ foreach ($candidate in @("python", "py", "python3")) {
 }
 
 if (-not $pyCmd) {
-    Write-Warn "Python 3.11+ not found — installing via winget (this may take a minute)..."
-    $r = winget install --id Python.Python.3.11 -e `
-        --accept-source-agreements --accept-package-agreements 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        throw "winget install Python failed. Please install Python 3.11+ manually from https://python.org and re-run."
+    # Try winget first; fall back to direct download if winget is unavailable
+    $wingetOk = $false
+    $wingetCmd = Get-Command winget -ErrorAction SilentlyContinue
+    if ($wingetCmd) {
+        Write-Warn "Python 3.11+ not found — installing via winget (this may take a minute)..."
+        winget install --id Python.Python.3.11 -e `
+            --accept-source-agreements --accept-package-agreements 2>&1 | Out-Null
+        $wingetOk = ($LASTEXITCODE -eq 0)
     }
-    # Refresh PATH
+
+    if (-not $wingetOk) {
+        Write-Warn "winget unavailable or failed — downloading Python 3.11 installer from python.org..."
+        $pyInstaller = "$env:TEMP\python-3.11-amd64.exe"
+        Download-File "https://www.python.org/ftp/python/3.11.9/python-3.11.9-amd64.exe" $pyInstaller
+        Start-Process -FilePath $pyInstaller `
+            -ArgumentList "/quiet InstallAllUsers=1 PrependPath=1 Include_test=0" `
+            -Wait
+        Remove-Item $pyInstaller -ErrorAction SilentlyContinue
+    }
+
+    # Refresh PATH so the new python is visible in this session
     $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" +
                 [System.Environment]::GetEnvironmentVariable("Path", "User")
     $pyCmd = "python"
@@ -309,8 +352,10 @@ $pip      = "$venvDir\Scripts\pip.exe"
 $python   = "$venvDir\Scripts\python.exe"
 
 & $pyCmd -m venv $venvDir
-& $pip install --quiet --upgrade pip
-& $pip install --quiet -r "$InstallDir\src\requirements.txt"
+& $python -m pip install --quiet --upgrade pip
+if ($LASTEXITCODE -ne 0) { throw "pip upgrade failed (exit $LASTEXITCODE)" }
+& $pip install -r "$InstallDir\src\agent\requirements.txt"
+if ($LASTEXITCODE -ne 0) { throw "pip install requirements failed (exit $LASTEXITCODE)" }
 Write-Ok "venv ready: $venvDir"
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -383,7 +428,7 @@ $agentCfg = [ordered]@{
 } | ConvertTo-Json -Depth 5
 
 $agentCfgPath = "$InstallDir\config.json"
-$agentCfg | Set-Content -Path $agentCfgPath -Encoding UTF8
+[System.IO.File]::WriteAllText($agentCfgPath, $agentCfg, [System.Text.UTF8Encoding]::new($false))
 Write-Ok "config.json written"
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -407,7 +452,7 @@ localPort = 8787
 remotePort = $($reg.frpRemotePort)
 "@
 
-$frpcToml | Set-Content -Path "$InstallDir\frpc.toml" -Encoding UTF8
+[System.IO.File]::WriteAllText("$InstallDir\frpc.toml", $frpcToml, [System.Text.UTF8Encoding]::new($false))
 Write-Ok "frpc.toml written"
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -419,13 +464,13 @@ Write-Step "Installing DCSAgent service"
 $existing = Get-Service -Name "DCSAgent" -ErrorAction SilentlyContinue
 if ($existing) {
     Write-Warn "DCSAgent service already exists — removing and reinstalling"
-    & $nssm stop DCSAgent 2>$null
-    & $nssm remove DCSAgent confirm 2>$null
+    try { & $nssm stop DCSAgent 2>&1 | Out-Null } catch { }
+    try { & $nssm remove DCSAgent confirm 2>&1 | Out-Null } catch { }
     Start-Sleep -Seconds 1
 }
 
 & $nssm install DCSAgent $python
-& $nssm set DCSAgent AppParameters "-m agent serve --config `"$agentCfgPath`""
+& $nssm set DCSAgent AppParameters "-m agent --config `"$agentCfgPath`" serve"
 & $nssm set DCSAgent AppDirectory "$InstallDir\src"
 & $nssm set DCSAgent Description "DCS World Agent API"
 & $nssm set DCSAgent Start SERVICE_AUTO_START
@@ -443,8 +488,8 @@ Write-Step "Installing DCSAgentFrpc tunnel service"
 $existingFrpc = Get-Service -Name "DCSAgentFrpc" -ErrorAction SilentlyContinue
 if ($existingFrpc) {
     Write-Warn "DCSAgentFrpc service already exists — removing and reinstalling"
-    & $nssm stop DCSAgentFrpc 2>$null
-    & $nssm remove DCSAgentFrpc confirm 2>$null
+    try { & $nssm stop DCSAgentFrpc 2>&1 | Out-Null } catch { }
+    try { & $nssm remove DCSAgentFrpc confirm 2>&1 | Out-Null } catch { }
     Start-Sleep -Seconds 1
 }
 
@@ -502,7 +547,7 @@ $tmpXml = [System.IO.Path]::GetTempFileName() + ".xml"
 [System.IO.File]::WriteAllText($tmpXml, $taskXml, [System.Text.Encoding]::Unicode)
 
 # Remove existing task if present
-schtasks /delete /tn $ServiceName /f 2>$null
+try { schtasks /delete /tn $ServiceName /f 2>&1 | Out-Null } catch { }
 
 schtasks /create /tn $ServiceName /xml $tmpXml /f | Out-Null
 Remove-Item $tmpXml -ErrorAction SilentlyContinue
@@ -515,7 +560,7 @@ Write-Step "Creating DCS-UpdateDCS update task"
 
 # Copy the update script into the install directory
 $updateScript = "$InstallDir\update_DCS_auto.ps1"
-$updateScriptSrc = "$InstallDir\src\scripts\update_DCS_auto.ps1"
+$updateScriptSrc = "$InstallDir\src\agent\scripts\update_DCS_auto.ps1"
 if (Test-Path $updateScriptSrc) {
     Copy-Item $updateScriptSrc $updateScript -Force
 } else {
@@ -554,7 +599,7 @@ $updateTaskXml = @"
 
 $tmpUpdateXml = [System.IO.Path]::GetTempFileName() + ".xml"
 [System.IO.File]::WriteAllText($tmpUpdateXml, $updateTaskXml, [System.Text.Encoding]::Unicode)
-schtasks /delete /tn "DCS-UpdateDCS" /f 2>$null
+try { schtasks /delete /tn "DCS-UpdateDCS" /f 2>&1 | Out-Null } catch { }
 schtasks /create /tn "DCS-UpdateDCS" /xml $tmpUpdateXml /f | Out-Null
 Remove-Item $tmpUpdateXml -ErrorAction SilentlyContinue
 Write-Ok "DCS-UpdateDCS task created (runs as SYSTEM)"
@@ -571,7 +616,7 @@ Write-Step "Installing DCS Lua status hook"
 $hooksDir = "$savedGamesPath\Scripts\Hooks"
 New-Item -ItemType Directory -Force -Path $hooksDir | Out-Null
 
-$hookSrc = "$InstallDir\src\scripts\dcs_agent_hook.lua"
+$hookSrc = "$InstallDir\src\agent\scripts\dcs_agent_hook.lua"
 if (Test-Path $hookSrc) {
     Copy-Item $hookSrc "$hooksDir\dcs_agent_hook.lua" -Force
     Write-Ok "Hook installed to $hooksDir"
@@ -584,13 +629,28 @@ if (Test-Path $hookSrc) {
 # ══════════════════════════════════════════════════════════════════════════════
 Write-Step "Starting services"
 
-Start-Service DCSAgentFrpc
-Write-Ok "DCSAgentFrpc started (tunnel connecting to $($reg.frpServerAddr):$($reg.frpServerPort))"
+try {
+    Start-Service DCSAgentFrpc
+    Write-Ok "DCSAgentFrpc started (tunnel connecting to $($reg.frpServerAddr):$($reg.frpServerPort))"
+} catch {
+    Write-Warn "DCSAgentFrpc failed to start — check log: $InstallDir\logs\frpc.log"
+}
 
 Start-Sleep -Seconds 2
 
-Start-Service DCSAgent
-Write-Ok "DCSAgent started (listening on port 8787)"
+try {
+    Start-Service DCSAgent
+    Write-Ok "DCSAgent started (listening on port 8787)"
+} catch {
+    Write-Warn "DCSAgent failed to start — check log: $InstallDir\logs\agent.log"
+    Write-Host ""
+    Write-Host "  Last 20 lines of agent log:" -ForegroundColor Yellow
+    if (Test-Path "$InstallDir\logs\agent.log") {
+        Get-Content "$InstallDir\logs\agent.log" -Tail 20 | ForEach-Object { Write-Host "    $_" }
+    } else {
+        Write-Host "    (log file not found — service may have failed before writing output)" -ForegroundColor DarkGray
+    }
+}
 
 # ══════════════════════════════════════════════════════════════════════════════
 # 18. Create desktop shortcuts (optional)
@@ -598,8 +658,18 @@ Write-Ok "DCSAgent started (listening on port 8787)"
 Write-Step "Desktop shortcuts"
 $createShortcuts = Read-Host "  Create desktop shortcuts for starting and updating? [Y/n]"
 if ($createShortcuts -eq "" -or $createShortcuts -match "^[Yy]") {
-    $desktop = [System.Environment]::GetFolderPath("Desktop")
-    $wsh     = New-Object -ComObject WScript.Shell
+    $desktop  = [System.Environment]::GetFolderPath("Desktop")
+    $wsh      = New-Object -ComObject WScript.Shell
+    $dcsIco   = "$env:SystemDrive\Program Files\Eagle Dynamics\DCS World Server\FUI\DCS-3.ico"
+
+    # ── Remove the default DCS World Server shortcut placed by the installer ──
+    foreach ($name in @("DCS World Server", "DCS World OpenBeta Server")) {
+        $lnk = "$desktop\$name.lnk"
+        if (Test-Path $lnk) {
+            Remove-Item $lnk -Force
+            Write-Ok "Removed default shortcut: $name.lnk"
+        }
+    }
 
     # ── Start <InstanceName> ──────────────────────────────────────────────────
     $startLnkPath = "$desktop\Start $InstanceName.lnk"
@@ -608,6 +678,7 @@ if ($createShortcuts -eq "" -or $createShortcuts -match "^[Yy]") {
     $startLnk.Arguments   = "/c schtasks /run /tn `"$ServiceName`""
     $startLnk.WindowStyle = 7  # minimised — no console flash
     $startLnk.Description = "Start $InstanceName via Task Scheduler (bot-managed)"
+    if (Test-Path $dcsIco) { $startLnk.IconLocation = "$dcsIco,0" }
     $startLnk.Save()
     Write-Ok "Created: Start $InstanceName.lnk"
 
@@ -622,7 +693,7 @@ if ($createShortcuts -eq "" -or $createShortcuts -match "^[Yy]") {
 Invoke-WebRequest -UseBasicParsing $OrchestratorUrl/install/install.ps1 -OutFile `$f
 & powershell -ExecutionPolicy Bypass -File `$f -Update -OrchestratorUrl $OrchestratorUrl
 "@
-    $updateHelperContent | Set-Content -Path $updateHelper -Encoding UTF8
+    [System.IO.File]::WriteAllText($updateHelper, $updateHelperContent, [System.Text.UTF8Encoding]::new($false))
 
     $updateLnkPath = "$desktop\Update DCS Agent.lnk"
     $updateLnk = $wsh.CreateShortcut($updateLnkPath)
@@ -630,6 +701,7 @@ Invoke-WebRequest -UseBasicParsing $OrchestratorUrl/install/install.ps1 -OutFile
     $updateLnk.Arguments   = "-NoProfile -ExecutionPolicy Bypass -File `"$updateHelper`""
     $updateLnk.WindowStyle = 1
     $updateLnk.Description = "Update DCS Agent to the latest version"
+    if (Test-Path $dcsIco) { $updateLnk.IconLocation = "$dcsIco,0" }
     $updateLnk.Save()
     # Set the Run as Administrator flag (byte 0x15, bit 0x20 of the .lnk header)
     $lnkBytes = [System.IO.File]::ReadAllBytes($updateLnkPath)
