@@ -1630,13 +1630,26 @@ class DcsCog(commands.Cog):
             current: str,
         ) -> list[app_commands.Choice[str]]:
             """Autocomplete across every instance's Missions folder on every host.
-            Value format: '<instance_id>::<filename>' so we know the source."""
+            Sorted by most-played (analytics). Adds a search hint when results are capped.
+            Value format: '<instance_id>::<filename>'"""
             try:
                 instances = await client.list_instances()
             except Exception:
                 return []
+
+            # Build play-count map from analytics (mission_name = filename stem)
+            play_counts: dict[str, int] = {}
+            try:
+                events = await client.get_analytics_events(limit=1000)
+                for e in events:
+                    if e.get("event_type") == "mission_start" and e.get("mission_name"):
+                        stem = e["mission_name"]
+                        play_counts[stem] = play_counts.get(stem, 0) + 1
+            except Exception:
+                pass
+
             low = current.lower()
-            choices: list[app_commands.Choice[str]] = []
+            candidates: list[tuple[int, str, str]] = []  # (play_count, label, value)
             for inst in instances:
                 try:
                     items = await client.list_missions(inst["id"])
@@ -1645,10 +1658,26 @@ class DcsCog(commands.Cog):
                 for filename in items:
                     if low and low not in filename.lower():
                         continue
-                    label = f"{inst['name']} › {filename}"
-                    choices.append(app_commands.Choice(name=label[:100], value=f"{inst['id']}::{filename}"))
-                    if len(choices) >= 25:
-                        return choices
+                    stem = filename[:-4] if filename.lower().endswith(".miz") else filename
+                    count = play_counts.get(stem, 0)
+                    label = f"{inst['name']} \u203a {filename}"
+                    if count:
+                        label += f" ({count}\u00d7)"
+                    candidates.append((count, label, f"{inst['id']}::{filename}"))
+
+            candidates.sort(key=lambda x: -x[0])
+
+            choices = [
+                app_commands.Choice(name=c[1][:100], value=c[2])
+                for c in candidates[:24]
+            ]
+
+            if len(candidates) > 24:
+                choices.append(app_commands.Choice(
+                    name=f"... {len(candidates) - 24} more — type a name to search",
+                    value="__hint__",
+                ))
+
             return choices
 
         @self.dcs.command(name="copy-mission", description="Copy a mission from any server's Missions folder into the shared Active Missions library")
@@ -1660,9 +1689,10 @@ class DcsCog(commands.Cog):
             if not await _require_operator(interaction):
                 return
 
-            if "::" not in source:
+            if source == "__hint__" or "::" not in source:
                 await interaction.response.send_message(
-                    "Please select a mission from the autocomplete list.", ephemeral=True
+                    "Type part of the mission name to filter the list, then select from the results.",
+                    ephemeral=True,
                 )
                 return
 
