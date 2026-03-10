@@ -54,8 +54,10 @@ $ProgressPreference    = "SilentlyContinue"   # speeds up Invoke-WebRequest down
 # ── Validate orchestrator URL ───────────────────────────────────────────────────
 
 $OrchestratorUrl = $OrchestratorUrl.TrimEnd("/")
-if (-not $OrchestratorUrl.StartsWith("https://")) {
-    throw "OrchestratorUrl must use HTTPS. Received: $OrchestratorUrl"
+while (-not $OrchestratorUrl.StartsWith("https://")) {
+    Write-Host ""
+    Write-Host "  Orchestrator URL is required (e.g. https://goon.gsquad.cc)." -ForegroundColor Yellow
+    $OrchestratorUrl = (Read-Host "  Enter orchestrator URL").Trim().TrimEnd("/")
 }
 
 # ── Constants ──────────────────────────────────────────────────────────────────
