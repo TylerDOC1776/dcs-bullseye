@@ -159,6 +159,15 @@ if (-not $HostName) {
     if (-not $HostName) { $HostName = $env:COMPUTERNAME }
 }
 
+# Prompt for the instance/server name if still the default
+if ($InstanceName -eq "Community Server") {
+    Write-Host ""
+    Write-Host "  What is the name of your DCS server instance?" -ForegroundColor Cyan
+    Write-Host "  (shown in Discord commands like /dcs start — e.g. 'MySquadron Server')" -ForegroundColor DarkGray
+    $typed = (Read-Host "  Instance name").Trim()
+    if ($typed) { $InstanceName = $typed }
+}
+
 Write-Host " Invite code : $InviteCode"
 Write-Host " Host name   : $HostName"
 Write-Host " Instance    : $InstanceName"
