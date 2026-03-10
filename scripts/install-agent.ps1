@@ -274,13 +274,27 @@ foreach ($candidate in @("python", "py", "python3")) {
 }
 
 if (-not $pyCmd) {
-    Write-Warn "Python 3.11+ not found — installing via winget (this may take a minute)..."
-    $r = winget install --id Python.Python.3.11 -e `
-        --accept-source-agreements --accept-package-agreements 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        throw "winget install Python failed. Please install Python 3.11+ manually from https://python.org and re-run."
+    # Try winget first; fall back to direct download if winget is unavailable
+    $wingetOk = $false
+    $wingetCmd = Get-Command winget -ErrorAction SilentlyContinue
+    if ($wingetCmd) {
+        Write-Warn "Python 3.11+ not found — installing via winget (this may take a minute)..."
+        winget install --id Python.Python.3.11 -e `
+            --accept-source-agreements --accept-package-agreements 2>&1 | Out-Null
+        $wingetOk = ($LASTEXITCODE -eq 0)
     }
-    # Refresh PATH
+
+    if (-not $wingetOk) {
+        Write-Warn "winget unavailable or failed — downloading Python 3.11 installer from python.org..."
+        $pyInstaller = "$env:TEMP\python-3.11-amd64.exe"
+        Download-File "https://www.python.org/ftp/python/3.11.9/python-3.11.9-amd64.exe" $pyInstaller
+        Start-Process -FilePath $pyInstaller `
+            -ArgumentList "/quiet InstallAllUsers=1 PrependPath=1 Include_test=0" `
+            -Wait
+        Remove-Item $pyInstaller -ErrorAction SilentlyContinue
+    }
+
+    # Refresh PATH so the new python is visible in this session
     $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" +
                 [System.Environment]::GetEnvironmentVariable("Path", "User")
     $pyCmd = "python"
