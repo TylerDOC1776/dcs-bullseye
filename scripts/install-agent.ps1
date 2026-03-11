@@ -625,7 +625,34 @@ if (Test-Path $hookSrc) {
 }
 
 # ══════════════════════════════════════════════════════════════════════════════
-# 17. Start services
+# 17. Unsanitize io/lfs in MissionScripting.lua (required for persistence)
+# ══════════════════════════════════════════════════════════════════════════════
+Write-Step "Patching MissionScripting.lua for persistence (io/lfs)"
+
+$missionScriptingPath = "$(Split-Path $dcsBinDir -Parent)\Scripts\MissionScripting.lua"
+if (Test-Path $missionScriptingPath) {
+    $ms = [System.IO.File]::ReadAllText($missionScriptingPath)
+    $patched = $false
+    if ($ms -match "(?m)^\s*sanitizeModule\('io'\)") {
+        $ms = $ms -replace "(?m)^(\s*)(sanitizeModule\('io'\))", '$1--$2  -- DCS Platform: unsanitized for persistence'
+        $patched = $true
+    }
+    if ($ms -match "(?m)^\s*sanitizeModule\('lfs'\)") {
+        $ms = $ms -replace "(?m)^(\s*)(sanitizeModule\('lfs'\))", '$1--$2  -- DCS Platform: unsanitized for persistence'
+        $patched = $true
+    }
+    if ($patched) {
+        [System.IO.File]::WriteAllText($missionScriptingPath, $ms, [System.Text.Encoding]::UTF8)
+        Write-Ok "MissionScripting.lua patched — io/lfs unsanitized"
+    } else {
+        Write-Ok "MissionScripting.lua already patched — no changes needed"
+    }
+} else {
+    Write-Warn "MissionScripting.lua not found at $missionScriptingPath — skipping. Persistence scripts will not work."
+}
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 18. Start services
 # ══════════════════════════════════════════════════════════════════════════════
 Write-Step "Starting services"
 
