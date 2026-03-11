@@ -5,6 +5,7 @@ import io
 import json
 import logging
 import os
+import time
 from datetime import datetime, time as dt_time, timezone
 from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
@@ -283,12 +284,17 @@ class _ConfirmView(discord.ui.View):
 # Cog                                                                  #
 # ------------------------------------------------------------------ #
 
+_KEEPALIVE_COOLDOWN = 20 * 60  # seconds between restart attempts per instance
+
+
 class DcsCog(commands.Cog):
     def __init__(self, config: BotConfig, client: OrchestratorClient, bot: commands.Bot) -> None:
         self.config = config
         self.client = client
         self._bot = bot
         self._status_message_id: int | None = None
+        # keepalive cooldown: instance_id → monotonic time of last start attempt
+        self._keepalive_last_attempt: dict[str, float] = {}
         self.dcs: app_commands.Group = app_commands.Group(
             name="dcs", description="Manage DCS World server instances"
         )
@@ -445,10 +451,15 @@ class DcsCog(commands.Cog):
                 if channel:
                     await channel.send(f"❌ Auto-restart failed for **{name}**: {exc}")
 
+    def keepalive_clear(self, instance_id: str) -> None:
+        """Clear the keepalive cooldown for an instance (call when it reaches 'running')."""
+        self._keepalive_last_attempt.pop(instance_id, None)
+
     async def _run_keepalive_check(self) -> None:
         """Start any non-excluded instance that is stopped."""
         exclude = {n.lower() for n in self.config.auto_restart_exclude}
         channel = self._status_channel()
+        now = time.monotonic()
         try:
             instances = await self.client.list_instances()
         except Exception as exc:
@@ -456,17 +467,26 @@ class DcsCog(commands.Cog):
             return
 
         for inst in instances:
-            name = inst.get("name", inst.get("id", "?"))
+            instance_id = inst.get("id", "")
+            name = inst.get("name", instance_id or "?")
             if name.lower() in exclude:
                 continue
             runtime = inst.get("runtime") or {}
             if runtime.get("status") != "stopped":
                 continue
+
+            last = self._keepalive_last_attempt.get(instance_id)
+            if last is not None and now - last < _KEEPALIVE_COOLDOWN:
+                remaining = int(_KEEPALIVE_COOLDOWN - (now - last))
+                log.debug("Keepalive: %s in cooldown (%ds remaining), skipping", name, remaining)
+                continue
+
+            self._keepalive_last_attempt[instance_id] = now
             log.info("Keepalive: starting stopped instance %s", name)
             if channel:
                 await channel.send(f"🔁 Auto-starting **{name}** — instance was stopped.")
             try:
-                await self.client.trigger_action(inst["id"], "start", actor_id="system")
+                await self.client.trigger_action(instance_id, "start", actor_id="system")
             except Exception as exc:
                 log.error("Keepalive: start failed for %s: %s", name, exc)
                 if channel:

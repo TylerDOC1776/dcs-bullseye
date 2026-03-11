@@ -162,6 +162,11 @@ class EventsCog(commands.Cog):
         if status == prev:
             return
 
+        # Suppress stopped→starting: this is just keepalive kicking in and
+        # the DcsCog already sends its own "Auto-starting" message for it.
+        if prev == "stopped" and status == "starting":
+            return
+
         # Crash loop detection
         if status in ("stopped", "error") and prev in ("running", "starting", "stopping"):
             now = time.monotonic()
@@ -175,14 +180,19 @@ class EventsCog(commands.Cog):
                 self._crash_loop_alerted.add(instance_id)
                 await self._on_crash_loop(channel, instance_name, len(times))
 
-        # When an instance recovers and crash history clears, reset alert state
+        # When an instance recovers, reset crash/alert state and keepalive cooldown
         if status == "running":
-            times = self._crash_times.get(instance_id, [])
             now = time.monotonic()
+            times = self._crash_times.get(instance_id, [])
             times = [t for t in times if now - t <= _CRASH_LOOP_WINDOW]
             self._crash_times[instance_id] = times
             if len(times) < _CRASH_LOOP_THRESHOLD:
                 self._crash_loop_alerted.discard(instance_id)
+            # Allow keepalive to attempt a restart immediately next time if needed
+            for cog in self.bot.cogs.values():  # type: ignore[attr-defined]
+                if hasattr(cog, "keepalive_clear"):
+                    cog.keepalive_clear(instance_id)
+                    break
 
         embed = discord.Embed(
             title="Instance status changed",
