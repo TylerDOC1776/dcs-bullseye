@@ -185,7 +185,7 @@ if ($Update) {
                 $patched = $true
             }
             if ($patched) {
-                [System.IO.File]::WriteAllText($missionScriptingPath, $ms, [System.Text.Encoding]::UTF8)
+                [System.IO.File]::WriteAllText($missionScriptingPath, $ms, [System.Text.UTF8Encoding]::new($false))
                 Write-Ok "MissionScripting.lua patched — io/lfs unsanitized"
             } else {
                 Write-Ok "MissionScripting.lua already patched — no changes needed"
@@ -686,7 +686,7 @@ if (Test-Path $missionScriptingPath) {
         $patched = $true
     }
     if ($patched) {
-        [System.IO.File]::WriteAllText($missionScriptingPath, $ms, [System.Text.Encoding]::UTF8)
+        [System.IO.File]::WriteAllText($missionScriptingPath, $ms, [System.Text.UTF8Encoding]::new($false))
         Write-Ok "MissionScripting.lua patched — io/lfs unsanitized"
     } else {
         Write-Ok "MissionScripting.lua already patched — no changes needed"
