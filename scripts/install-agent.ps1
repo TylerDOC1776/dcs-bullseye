@@ -193,6 +193,46 @@ if ($Update) {
         }
     }
 
+    # Recreate DCS-UpdateDCS task so it runs as current user (not SYSTEM)
+    $updateScript  = "$InstallDir\update_DCS_auto.ps1"
+    $updateCfgPath = "$InstallDir\config.json"
+    $updateSid     = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+    $updateTaskXml = @"
+<?xml version="1.0" encoding="UTF-16"?>
+<Task version="1.3" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <RegistrationInfo>
+    <URI>\DCS-UpdateDCS</URI>
+    <Description>Stops DCS servers, runs DCS_updater.exe, restarts servers. Triggered by DCS Agent.</Description>
+  </RegistrationInfo>
+  <Principals>
+    <Principal id="Author">
+      <UserId>$updateSid</UserId>
+      <LogonType>InteractiveToken</LogonType>
+    </Principal>
+  </Principals>
+  <Settings>
+    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
+    <ExecutionTimeLimit>PT2H</ExecutionTimeLimit>
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <UseUnifiedSchedulingEngine>true</UseUnifiedSchedulingEngine>
+  </Settings>
+  <Triggers />
+  <Actions Context="Author">
+    <Exec>
+      <Command>powershell.exe</Command>
+      <Arguments>-NoProfile -ExecutionPolicy Bypass -File "$updateScript" -ConfigFile "$updateCfgPath"</Arguments>
+    </Exec>
+  </Actions>
+</Task>
+"@
+    $tmpUpdateXml = [System.IO.Path]::GetTempFileName() + ".xml"
+    [System.IO.File]::WriteAllText($tmpUpdateXml, $updateTaskXml, [System.Text.Encoding]::Unicode)
+    try { schtasks /delete /tn "DCS-UpdateDCS" /f 2>&1 | Out-Null } catch { }
+    schtasks /create /tn "DCS-UpdateDCS" /xml $tmpUpdateXml /f | Out-Null
+    Remove-Item $tmpUpdateXml -ErrorAction SilentlyContinue
+    Write-Ok "DCS-UpdateDCS task recreated (runs as current user)"
+
     Write-Step "Starting DCSAgent service"
     Start-Service DCSAgent
     Write-Ok "DCSAgent restarted with updated source"
@@ -598,7 +638,7 @@ Remove-Item $tmpXml -ErrorAction SilentlyContinue
 Write-Ok "Task Scheduler task created: $ServiceName"
 
 # ══════════════════════════════════════════════════════════════════════════════
-# 15. Create DCS-UpdateDCS Task Scheduler task (runs as SYSTEM)
+# 15. Create DCS-UpdateDCS Task Scheduler task (runs as current user — DCS_updater.exe needs user credentials)
 # ══════════════════════════════════════════════════════════════════════════════
 Write-Step "Creating DCS-UpdateDCS update task"
 
@@ -620,8 +660,8 @@ $updateTaskXml = @"
   </RegistrationInfo>
   <Principals>
     <Principal id="Author">
-      <UserId>S-1-5-18</UserId>
-      <RunLevel>HighestAvailable</RunLevel>
+      <UserId>$sid</UserId>
+      <LogonType>InteractiveToken</LogonType>
     </Principal>
   </Principals>
   <Settings>
@@ -646,7 +686,7 @@ $tmpUpdateXml = [System.IO.Path]::GetTempFileName() + ".xml"
 try { schtasks /delete /tn "DCS-UpdateDCS" /f 2>&1 | Out-Null } catch { }
 schtasks /create /tn "DCS-UpdateDCS" /xml $tmpUpdateXml /f | Out-Null
 Remove-Item $tmpUpdateXml -ErrorAction SilentlyContinue
-Write-Ok "DCS-UpdateDCS task created (runs as SYSTEM)"
+Write-Ok "DCS-UpdateDCS task created (runs as current user)"
 
 # Ensure ProgramData status directory exists and is writable by SYSTEM
 New-Item -ItemType Directory -Force -Path "C:\ProgramData\DCSAgent" | Out-Null

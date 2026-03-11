@@ -54,6 +54,14 @@ try {
         exit 1
     }
 
+    # Read current DCS version before updating
+    $dcsRoot    = Split-Path (Split-Path $updaterPath -Parent) -Parent
+    $cfgPath    = "$dcsRoot\autoupdate.cfg"
+    $versionBefore = "unknown"
+    if (Test-Path $cfgPath) {
+        try { $versionBefore = (Get-Content $cfgPath -Raw | ConvertFrom-Json).version } catch { }
+    }
+
     # ── Stop all DCS instances ────────────────────────────────────────────────
     Write-Status "stopping" $true "Stopping all DCS servers..."
 
@@ -73,15 +81,34 @@ try {
     # Give processes time to fully exit
     Start-Sleep -Seconds 10
 
+    # ── Fetch latest version from DCS changelog ───────────────────────────────
+    $targetVersion = $null
+    try {
+        $page  = Invoke-WebRequest -Uri "https://www.digitalcombatsimulator.com/en/news/changelog/release/" -UseBasicParsing
+        $match = [regex]::Match($page.Content, '/en/news/changelog/release/(\d+\.\d+\.\d+\.\d+)/')
+        if ($match.Success) { $targetVersion = $match.Groups[1].Value }
+    } catch { }
+
     # ── Run DCS_updater.exe ───────────────────────────────────────────────────
-    Write-Status "updating" $true "Running DCS updater — this may take 10-60 minutes..."
+    $updateMsg = if ($targetVersion) { "Running DCS updater — updating to $targetVersion..." } `
+                 else                { "Running DCS updater — this may take 10-60 minutes..." }
+    Write-Status "updating" $true $updateMsg
 
-    $updater = Start-Process -FilePath $updaterPath `
-                             -ArgumentList "update" `
-                             -Wait -PassThru -NoNewWindow
+    $updaterDir = Split-Path $updaterPath -Parent
+    Push-Location $updaterDir
+    try {
+        if ($targetVersion) {
+            & $updaterPath "update" $targetVersion
+        } else {
+            & $updaterPath "--quiet" "update"
+        }
+        $updaterExit = $LASTEXITCODE
+    } finally {
+        Pop-Location
+    }
 
-    if ($updater.ExitCode -ne 0) {
-        Write-Status "failed" $false "DCS_updater.exe failed with exit code $($updater.ExitCode)"
+    if ($updaterExit -ne 0) {
+        Write-Status "failed" $false "DCS_updater.exe failed with exit code $updaterExit"
         exit 1
     }
 
@@ -93,7 +120,18 @@ try {
         Start-Sleep -Seconds 5
     }
 
-    Write-Status "complete" $false "Update complete. Servers are coming back online."
+    # Read version after update and report what changed
+    $versionAfter = "unknown"
+    if (Test-Path $cfgPath) {
+        try { $versionAfter = (Get-Content $cfgPath -Raw | ConvertFrom-Json).version } catch { }
+    }
+
+    $completeMsg = if ($versionAfter -ne $versionBefore) {
+        "Updated $versionBefore -> $versionAfter. Servers are coming back online."
+    } else {
+        "Already up to date ($versionAfter). Servers are coming back online."
+    }
+    Write-Status "complete" $false $completeMsg
 
 } catch {
     Write-Status "failed" $false "Unexpected error: $_"
