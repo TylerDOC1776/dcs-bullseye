@@ -197,14 +197,18 @@ def _dedup_blocks(blocks: list[list[str]]) -> list[str]:
 # ------------------------------------------------------------------
 
 def _kill_any_dcs_server() -> None:
-    """Kill all DCS_server.exe processes regardless of how they were started.
+    """Kill DCS_server.exe processes that were NOT started with a -w flag.
 
     Prevents port conflicts when a user has DCS running via a desktop shortcut
     (without -w flag) at the same time the agent tries to start it via Task Scheduler.
+    Managed instances always include -w <saved_games_key> in their command line,
+    so this only removes unmanaged orphans.
     """
     subprocess.run(
         ["powershell", "-NoProfile", "-Command",
-         "Get-Process DCS_server -ErrorAction SilentlyContinue | Stop-Process -Force"],
+         "Get-CimInstance Win32_Process -Filter \"name='DCS_server.exe'\" "
+         "| Where-Object { $_.CommandLine -notlike '*-w *' } "
+         "| ForEach-Object { Stop-Process -Id $_.ProcessId -Force }"],
         capture_output=True, text=True,
     )
 
