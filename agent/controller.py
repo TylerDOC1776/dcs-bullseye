@@ -300,8 +300,9 @@ _HOOK_STALE_SECONDS = 300  # hook writes every 5 s; discard if silent for 5 min
 def _read_hook_status(log_path: str) -> dict:
     """Read the dcs_agent_status.json written by the Lua hook, or return {}.
 
-    Returns {} if the file is missing, unreadable, or stale (updated_at older
-    than _HOOK_STALE_SECONDS), so callers never see stale mission/player data.
+    Returns {} if the file is missing or unreadable.  If stale, returns the
+    last known mission data with player fields zeroed so callers show the last
+    known mission time rather than --- while still showing 0 players.
     """
     status_file = Path(log_path).parent / "dcs_agent_status.json"
     if not status_file.exists():
@@ -315,7 +316,9 @@ def _read_hook_status(log_path: str) -> dict:
         try:
             updated_at = datetime.fromisoformat(updated_at_str.replace("Z", "+00:00"))
             if (datetime.now(timezone.utc) - updated_at).total_seconds() > _HOOK_STALE_SECONDS:
-                return {}
+                data["player_count"] = 0
+                data["players"] = []
+                return data
         except (ValueError, TypeError):
             pass
     return data
