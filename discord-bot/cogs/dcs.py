@@ -286,6 +286,35 @@ class _ConfirmView(discord.ui.View):
 
 _KEEPALIVE_COOLDOWN = 20 * 60  # seconds between restart attempts per instance
 
+_UPDATE_PHASE_COLOURS: dict[str, int] = {
+    "starting":   0xE67E22,
+    "stopping":   0xE67E22,
+    "updating":   0x3498DB,
+    "restarting": 0xE67E22,
+    "complete":   0x2ECC71,
+    "failed":     0xE74C3C,
+}
+_UPDATE_PHASE_ICONS: dict[str, str] = {
+    "starting":   "🔄",
+    "stopping":   "🛑",
+    "updating":   "⬇️",
+    "restarting": "🔁",
+    "complete":   "✅",
+    "failed":     "❌",
+}
+
+
+def _update_phase_embed(host: str, phase: str, message: str) -> discord.Embed:
+    colour = _UPDATE_PHASE_COLOURS.get(phase, 0x95A5A6)
+    icon   = _UPDATE_PHASE_ICONS.get(phase, "🔄")
+    embed  = discord.Embed(
+        title=f"{icon} DCS Update — `{host}`",
+        description=message,
+        colour=colour,
+    )
+    embed.set_footer(text=f"Phase: {phase}")
+    return embed
+
 
 class DcsCog(commands.Cog):
     def __init__(self, config: BotConfig, client: OrchestratorClient, bot: commands.Bot) -> None:
@@ -1662,16 +1691,46 @@ class DcsCog(commands.Cog):
                 )
                 return
 
-            # Announce publicly in status channel
+            # Post a live-updating embed in the status channel
             status_ch = self._status_channel()
+            status_msg: discord.Message | None = None
             if status_ch:
-                await status_ch.send(
-                    f"🔄 DCS update started on `{host}` — its servers are stopping now. "
-                    "They will restart automatically when the update finishes (~10–60 min)."
+                status_msg = await status_ch.send(
+                    embed=_update_phase_embed(host, "starting", "Starting update...")
                 )
             await interaction.edit_original_response(
-                content="✅ Update triggered. Watch the status channel for progress.", view=None
+                content="Update triggered. Watch the status channel for progress.", view=None
             )
+
+            # Background task: poll status and edit the embed until done
+            async def _poll_update() -> None:
+                _PHASE_LABELS = {
+                    "starting":   "Starting...",
+                    "stopping":   "Stopping servers...",
+                    "updating":   "Downloading update...",
+                    "restarting": "Restarting servers...",
+                    "complete":   "Complete",
+                    "failed":     "Failed",
+                }
+                _POLL_INTERVAL = 10   # seconds between polls
+                _MAX_POLLS     = 360  # 60 minutes max
+                for _ in range(_MAX_POLLS):
+                    await asyncio.sleep(_POLL_INTERVAL)
+                    try:
+                        st = await client.get_update_status(matched["id"])
+                    except Exception:
+                        continue
+                    if status_msg:
+                        try:
+                            await status_msg.edit(
+                                embed=_update_phase_embed(host, st.get("phase", ""), st.get("message", ""))
+                            )
+                        except Exception:
+                            pass
+                    if not st.get("running", True):
+                        break
+
+            asyncio.create_task(_poll_update())
 
         # ---------------------------------------------------------------- #
         # /dcs copy-mission                                                  #

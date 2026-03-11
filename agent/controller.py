@@ -775,26 +775,134 @@ class DcsController:
     _UPDATE_STATUS_FILE = Path(r"C:\ProgramData\DCSAgent\update_status.json")
 
     def trigger_dcs_update(self) -> dict:
-        """Trigger the DCS-UpdateDCS Task Scheduler task (runs update_DCS_auto.ps1 as SYSTEM)."""
-        # Clear any stale status before starting
+        """Start the DCS update process in a background thread.
+
+        Returns immediately. Poll get_update_status() for progress.
+        The agent process already runs as the correct Windows user so
+        DCS_updater.exe can authenticate without a Task Scheduler task.
+        """
+        import threading
         if self._UPDATE_STATUS_FILE.exists():
             try:
                 self._UPDATE_STATUS_FILE.unlink()
             except OSError:
                 pass
-        result = subprocess.run(
-            ["schtasks", "/run", "/tn", "DCS-UpdateDCS"],
-            capture_output=True, text=True,
-        )
-        if result.returncode != 0:
-            raise RuntimeError(f"schtasks /run failed: {(result.stdout + result.stderr).strip()}")
+        thread = threading.Thread(target=self._run_update, daemon=True)
+        thread.start()
         return {"triggered": True}
+
+    def _write_update_status(self, phase: str, running: bool, message: str) -> None:
+        self._UPDATE_STATUS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        data = {
+            "phase": phase,
+            "running": running,
+            "message": message,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        self._UPDATE_STATUS_FILE.write_text(json.dumps(data, indent=4), encoding="utf-8")
+
+    def _run_update(self) -> None:
+        """Background thread: stop instances → update DCS → restart instances."""
+        import time
+        import re
+        import urllib.request
+
+        try:
+            self._write_update_status("starting", True, "Reading agent config...")
+
+            instances = self._config.instances
+            if not instances:
+                self._write_update_status("failed", False, "No instances found in config")
+                return
+
+            updater_path = Path(instances[0].exe_path).parent / "DCS_updater.exe"
+            if not updater_path.exists():
+                self._write_update_status("failed", False, f"DCS_updater.exe not found at: {updater_path}")
+                return
+
+            # Read current version before updating
+            dcs_root = updater_path.parent.parent
+            cfg_path = dcs_root / "autoupdate.cfg"
+            version_before = "unknown"
+            if cfg_path.exists():
+                try:
+                    version_before = json.loads(cfg_path.read_text(encoding="utf-8")).get("version", "unknown")
+                except Exception:
+                    pass
+
+            # Stop all instances
+            self._write_update_status("stopping", True, "Stopping all DCS servers...")
+            for inst in instances:
+                subprocess.run(["schtasks", "/end", "/tn", inst.service_name], capture_output=True)
+                ps = (
+                    f"$p = Get-CimInstance Win32_Process -Filter \"name='DCS_server.exe'\" "
+                    f"| Where-Object {{ $_.CommandLine -like '*{inst.saved_games_key}*' }}; "
+                    f"if ($p) {{ Stop-Process -Id $p.ProcessId -Force }}"
+                )
+                subprocess.run(["powershell", "-NoProfile", "-Command", ps], capture_output=True)
+            time.sleep(10)
+
+            # Fetch latest version from DCS changelog
+            target_version: str | None = None
+            try:
+                with urllib.request.urlopen(
+                    "https://www.digitalcombatsimulator.com/en/news/changelog/release/",
+                    timeout=10,
+                ) as resp:
+                    content = resp.read().decode("utf-8", errors="ignore")
+                m = re.search(r"/en/news/changelog/release/(\d+\.\d+\.\d+\.\d+)/", content)
+                if m:
+                    target_version = m.group(1)
+            except Exception:
+                pass
+
+            msg = (
+                f"Running DCS updater — updating to {target_version}..."
+                if target_version
+                else "Running DCS updater — this may take 10-60 minutes..."
+            )
+            self._write_update_status("updating", True, msg)
+
+            # Run DCS_updater.exe directly (inherits agent user credentials)
+            cmd = (
+                [str(updater_path), "update", target_version]
+                if target_version
+                else [str(updater_path), "--quiet", "update"]
+            )
+            result = subprocess.run(cmd, capture_output=True, text=True, cwd=str(updater_path.parent))
+            if result.returncode != 0:
+                self._write_update_status("failed", False, f"DCS_updater.exe failed with exit code {result.returncode}")
+                return
+
+            # Restart all instances
+            self._write_update_status("restarting", True, "Restarting DCS servers...")
+            for inst in instances:
+                subprocess.run(["schtasks", "/run", "/tn", inst.service_name], capture_output=True)
+                time.sleep(5)
+
+            # Read version after and report
+            version_after = "unknown"
+            if cfg_path.exists():
+                try:
+                    version_after = json.loads(cfg_path.read_text(encoding="utf-8")).get("version", "unknown")
+                except Exception:
+                    pass
+
+            if version_after != version_before and version_after != "unknown":
+                complete_msg = f"Updated {version_before} \u2192 {version_after}. Servers are coming back online."
+            else:
+                complete_msg = f"Already up to date ({version_after}). Servers are coming back online."
+            self._write_update_status("complete", False, complete_msg)
+
+        except Exception as exc:
+            self._write_update_status("failed", False, f"Unexpected error: {exc}")
 
     def get_update_status(self) -> dict:
         """Read the current DCS update status from the status JSON written by the update script."""
         if not self._UPDATE_STATUS_FILE.exists():
             return {"phase": "idle", "running": False, "message": "No update in progress"}
         try:
-            return json.loads(self._UPDATE_STATUS_FILE.read_text(encoding="utf-8"))
+            # utf-8-sig strips BOM if present (e.g. written by PowerShell Set-Content)
+            return json.loads(self._UPDATE_STATUS_FILE.read_text(encoding="utf-8-sig"))
         except (OSError, json.JSONDecodeError):
             return {"phase": "unknown", "running": False, "message": "Could not read status"}
