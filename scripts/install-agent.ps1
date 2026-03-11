@@ -149,6 +149,50 @@ if ($Update) {
         Write-Ok "update_DCS_auto.ps1 updated"
     }
 
+    # Update DCS Lua status hook
+    $hookSrc = "$InstallDir\src\agent\scripts\dcs_agent_hook.lua"
+    if (Test-Path $hookSrc) {
+        $savedGamesBase = [System.IO.Path]::Combine($env:USERPROFILE, "Saved Games")
+        $dcsProfiles = @(Get-ChildItem -Path $savedGamesBase -Directory -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -like "DCS*" })
+        foreach ($profile in $dcsProfiles) {
+            $hooksDir = "$($profile.FullName)\Scripts\Hooks"
+            New-Item -ItemType Directory -Force -Path $hooksDir | Out-Null
+            Copy-Item $hookSrc "$hooksDir\dcs_agent_hook.lua" -Force
+            Write-Ok "Hook updated: $hooksDir"
+        }
+    } else {
+        Write-Warn "Hook script not found at $hookSrc — skipping"
+    }
+
+    # Patch MissionScripting.lua for persistence (io/lfs)
+    $dcsExePaths = @(
+        "C:\Program Files\Eagle Dynamics\DCS World OpenBeta Server\bin\DCS_server.exe",
+        "C:\Program Files\Eagle Dynamics\DCS World Server\bin\DCS_server.exe"
+    )
+    $foundDcsExe = $dcsExePaths | Where-Object { Test-Path $_ } | Select-Object -First 1
+    if ($foundDcsExe) {
+        $missionScriptingPath = "$(Split-Path (Split-Path $foundDcsExe -Parent) -Parent)\Scripts\MissionScripting.lua"
+        if (Test-Path $missionScriptingPath) {
+            $ms = [System.IO.File]::ReadAllText($missionScriptingPath)
+            $patched = $false
+            if ($ms -match "(?m)^\s*sanitizeModule\('io'\)") {
+                $ms = $ms -replace "(?m)^(\s*)(sanitizeModule\('io'\))", '$1--$2  -- DCS Platform: unsanitized for persistence'
+                $patched = $true
+            }
+            if ($ms -match "(?m)^\s*sanitizeModule\('lfs'\)") {
+                $ms = $ms -replace "(?m)^(\s*)(sanitizeModule\('lfs'\))", '$1--$2  -- DCS Platform: unsanitized for persistence'
+                $patched = $true
+            }
+            if ($patched) {
+                [System.IO.File]::WriteAllText($missionScriptingPath, $ms, [System.Text.UTF8Encoding]::new($false))
+                Write-Ok "MissionScripting.lua patched — io/lfs unsanitized"
+            } else {
+                Write-Ok "MissionScripting.lua already patched — no changes needed"
+            }
+        }
+    }
+
     Write-Step "Starting DCSAgent service"
     Start-Service DCSAgent
     Write-Ok "DCSAgent restarted with updated source"
@@ -625,7 +669,34 @@ if (Test-Path $hookSrc) {
 }
 
 # ══════════════════════════════════════════════════════════════════════════════
-# 17. Start services
+# 17. Unsanitize io/lfs in MissionScripting.lua (required for persistence)
+# ══════════════════════════════════════════════════════════════════════════════
+Write-Step "Patching MissionScripting.lua for persistence (io/lfs)"
+
+$missionScriptingPath = "$(Split-Path $dcsBinDir -Parent)\Scripts\MissionScripting.lua"
+if (Test-Path $missionScriptingPath) {
+    $ms = [System.IO.File]::ReadAllText($missionScriptingPath)
+    $patched = $false
+    if ($ms -match "(?m)^\s*sanitizeModule\('io'\)") {
+        $ms = $ms -replace "(?m)^(\s*)(sanitizeModule\('io'\))", '$1--$2  -- DCS Platform: unsanitized for persistence'
+        $patched = $true
+    }
+    if ($ms -match "(?m)^\s*sanitizeModule\('lfs'\)") {
+        $ms = $ms -replace "(?m)^(\s*)(sanitizeModule\('lfs'\))", '$1--$2  -- DCS Platform: unsanitized for persistence'
+        $patched = $true
+    }
+    if ($patched) {
+        [System.IO.File]::WriteAllText($missionScriptingPath, $ms, [System.Text.UTF8Encoding]::new($false))
+        Write-Ok "MissionScripting.lua patched — io/lfs unsanitized"
+    } else {
+        Write-Ok "MissionScripting.lua already patched — no changes needed"
+    }
+} else {
+    Write-Warn "MissionScripting.lua not found at $missionScriptingPath — skipping. Persistence scripts will not work."
+}
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 18. Start services
 # ══════════════════════════════════════════════════════════════════════════════
 Write-Step "Starting services"
 
