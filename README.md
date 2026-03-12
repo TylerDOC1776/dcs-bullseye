@@ -2,6 +2,8 @@
 
 # dcs-bullseye
 
+> **Pre-production** — actively developed and running in a private environment. Not yet ready for general use.
+
 DCS World server management system — Discord bot + orchestrator + Windows agent.
 
 ## Structure
