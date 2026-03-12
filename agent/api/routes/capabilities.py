@@ -14,9 +14,14 @@ from ..models import AgentCapabilities
 router = APIRouter()
 
 _SUPPORTED_ACTIONS = [
-    "start", "stop", "restart",
-    "logs_bundle", "mission_load",
-    "minimize_window", "reset_persist", "set_password",
+    "start",
+    "stop",
+    "restart",
+    "logs_bundle",
+    "mission_load",
+    "minimize_window",
+    "reset_persist",
+    "set_password",
 ]
 
 

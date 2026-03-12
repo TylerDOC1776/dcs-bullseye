@@ -103,7 +103,10 @@ class AgentClient:
     ) -> Any:
         assert self._client, "AgentClient must be used as a context manager"
         resp = await self._client.post(
-            self._url(path), json=body, timeout=timeout, headers=self._sign_headers("POST", path)
+            self._url(path),
+            json=body,
+            timeout=timeout,
+            headers=self._sign_headers("POST", path),
         )
         if not resp.is_success:
             detail = resp.text[:200]
@@ -150,7 +153,9 @@ class AgentClient:
         self, service_name: str, action: str, body: dict[str, Any] | None = None
     ) -> dict[str, Any]:
         """POST /agent/v1/instances/{serviceName}/actions/{action}"""
-        return await self._post(f"/instances/{service_name}/actions/{action}", body=body)
+        return await self._post(
+            f"/instances/{service_name}/actions/{action}", body=body
+        )
 
     async def list_missions(self, service_name: str) -> list[str]:
         """GET /agent/v1/instances/{serviceName}/missions"""
@@ -184,9 +189,13 @@ class AgentClient:
         """DELETE /agent/v1/instances/{serviceName}/missions/{filename}"""
         await self._delete(f"/instances/{service_name}/missions/{filename}")
 
-    async def copy_mission_to_active(self, service_name: str, filename: str) -> dict[str, Any]:
+    async def copy_mission_to_active(
+        self, service_name: str, filename: str
+    ) -> dict[str, Any]:
         """POST /agent/v1/instances/{serviceName}/missions/{filename}/copy-to-active"""
-        return await self._post(f"/instances/{service_name}/missions/{filename}/copy-to-active")
+        return await self._post(
+            f"/instances/{service_name}/missions/{filename}/copy-to-active"
+        )
 
     async def list_active_missions(self) -> list[dict[str, Any]]:
         """GET /agent/v1/missions — list the shared Active Missions folder (root only)."""
@@ -212,7 +221,9 @@ class AgentClient:
             raise AgentError(resp.status_code, resp.text[:200])
         return resp.json()
 
-    async def download_active_mission(self, filename: str, timeout: float = 60.0) -> bytes:
+    async def download_active_mission(
+        self, filename: str, timeout: float = 60.0
+    ) -> bytes:
         """GET /agent/v1/missions/{filename} — download a .miz file as raw bytes."""
         assert self._client, "AgentClient must be used as a context manager"
         path = f"/missions/{filename}"

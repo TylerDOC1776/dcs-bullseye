@@ -152,6 +152,7 @@ async def list_host_active_missions(hostId: str, request: Request) -> dict:
 async def download_host_mission(hostId: str, filename: str, request: Request):
     """Download a .miz file from the agent host's active_missions_dir."""
     from fastapi.responses import Response as FastAPIResponse
+
     db: Database = request.app.state.db
     row = await _get_host_or_404(db, hostId)
 
@@ -179,9 +180,11 @@ async def upload_host_mission(hostId: str, request: Request) -> dict:
     for part in cd.split(";"):
         part = part.strip()
         if part.startswith("filename="):
-            filename = part[len("filename="):].strip().strip('"')
+            filename = part[len("filename=") :].strip().strip('"')
     if not filename:
-        raise HTTPException(status_code=400, detail="Missing filename in Content-Disposition header")
+        raise HTTPException(
+            status_code=400, detail="Missing filename in Content-Disposition header"
+        )
     if not filename.lower().endswith(".miz"):
         raise HTTPException(status_code=400, detail="Only .miz files are accepted")
 

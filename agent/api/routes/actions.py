@@ -51,9 +51,19 @@ async def _minimize_after_load(inst: InstanceConfig, ctrl: DcsController) -> Non
                 pass
             return
 
+
 router = APIRouter()
 
-_SUPPORTED_ACTIONS = {"start", "stop", "restart", "logs_bundle", "mission_load", "minimize_window", "reset_persist", "set_password"}
+_SUPPORTED_ACTIONS = {
+    "start",
+    "stop",
+    "restart",
+    "logs_bundle",
+    "mission_load",
+    "minimize_window",
+    "reset_persist",
+    "set_password",
+}
 
 
 async def _execute_job(
@@ -84,16 +94,23 @@ async def _execute_job(
         elif action == "logs_bundle":
             lines = await loop.run_in_executor(None, ctrl.tail_logs, inst, 200)
             errors = await loop.run_in_executor(None, ctrl.parse_errors, inst, 5000)
-            lines = [redact_line(l) for l in lines]
-            scripting = [redact_line(l) for l in errors["scripting_errors"]]
-            dcs_errs = [redact_line(l) for l in errors["dcs_errors"]]
-            job.result = {"lines": lines, "scripting_errors": scripting, "dcs_errors": dcs_errs}
+            lines = [redact_line(line) for line in lines]
+            scripting = [redact_line(line) for line in errors["scripting_errors"]]
+            dcs_errs = [redact_line(line) for line in errors["dcs_errors"]]
+            job.result = {
+                "lines": lines,
+                "scripting_errors": scripting,
+                "dcs_errors": dcs_errs,
+            }
         elif action == "mission_load":
             mission_file: str = (params or {}).get("mission", "")
             mission_path = await loop.run_in_executor(
                 None, ctrl.mission_load, inst, mission_file
             )
-            job.result = {"message": f"Mission loaded and server restarted", "mission": mission_path}
+            job.result = {
+                "message": "Mission loaded and server restarted",
+                "mission": mission_path,
+            }
         elif action == "minimize_window":
             await loop.run_in_executor(None, ctrl.minimize_windows)
             job.result = {"message": "DCS windows minimized"}
@@ -182,6 +199,7 @@ async def trigger_dcs_update(request: Request) -> dict:
         return await loop.run_in_executor(None, ctrl.trigger_dcs_update)
     except RuntimeError as exc:
         from fastapi import HTTPException
+
         raise HTTPException(status_code=500, detail=str(exc))
 
 

@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 _api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 _MAX_FAILS = 5
-_FAIL_WINDOW = 300      # seconds
+_FAIL_WINDOW = 300  # seconds
 _LOCKOUT_DURATION = 300  # seconds
 
 
@@ -65,7 +65,12 @@ class _FailedAuthTracker:
             count += 1
             if count >= self._max_fails:
                 locked_until = now + self._lockout
-                logger.warning("auth: locking out %s for %ds after %d failures", ip, self._lockout, count)
+                logger.warning(
+                    "auth: locking out %s for %ds after %d failures",
+                    ip,
+                    self._lockout,
+                    count,
+                )
             self._records[ip] = (count, window_start, locked_until)
 
     def record_success(self, ip: str) -> None:
@@ -95,7 +100,9 @@ async def require_api_key(
     ip = _client_ip(request)
 
     if _failed_auth.is_locked(ip):
-        raise HTTPException(status_code=429, detail="Too many failed auth attempts — try again later")
+        raise HTTPException(
+            status_code=429, detail="Too many failed auth attempts — try again later"
+        )
 
     if not api_key or not hmac.compare_digest(api_key, config.api_key):
         _failed_auth.record_failure(ip)

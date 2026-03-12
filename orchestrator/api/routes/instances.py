@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime, timezone
-from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
@@ -38,13 +37,13 @@ def _row_to_ref(row: dict) -> InstanceRef:
 async def _get_instance_or_404(db: Database, instance_id: str) -> dict:
     row = await db.get_instance(instance_id)
     if row is None:
-        raise HTTPException(status_code=404, detail=f"Instance {instance_id!r} not found")
+        raise HTTPException(
+            status_code=404, detail=f"Instance {instance_id!r} not found"
+        )
     return row
 
 
-async def _fetch_runtime(
-    host_row: dict, service_name: str
-) -> InstanceRuntime | None:
+async def _fetch_runtime(host_row: dict, service_name: str) -> InstanceRuntime | None:
     """Fetch runtime status from agent; returns None on any failure."""
     agent_base = host_row["agent_url"].rstrip("/") + "/agent/v1"
     try:
@@ -90,7 +89,9 @@ async def list_instances(request: Request) -> list[InstanceSummary]:
         if host_row:
             runtime = await _fetch_runtime(host_row, row["service_name"])
         else:
-            runtime = InstanceRuntime(status="unknown", observedAt=datetime.now(timezone.utc))
+            runtime = InstanceRuntime(
+                status="unknown", observedAt=datetime.now(timezone.utc)
+            )
         return InstanceSummary(
             id=row["id"],
             hostId=row["host_id"],
@@ -101,7 +102,9 @@ async def list_instances(request: Request) -> list[InstanceSummary]:
             runtime=runtime,
         )
 
-    results = await asyncio.gather(*[_summarize(r) for r in rows], return_exceptions=True)
+    results = await asyncio.gather(
+        *[_summarize(r) for r in rows], return_exceptions=True
+    )
 
     summaries: list[InstanceSummary] = []
     for r, row in zip(results, rows):
@@ -115,7 +118,9 @@ async def list_instances(request: Request) -> list[InstanceSummary]:
                     name=row["name"],
                     tags=row["tags"],
                     createdAt=row["created_at"],
-                    runtime=InstanceRuntime(status="unknown", observedAt=datetime.now(timezone.utc)),
+                    runtime=InstanceRuntime(
+                        status="unknown", observedAt=datetime.now(timezone.utc)
+                    ),
                 )
             )
         else:
@@ -155,7 +160,9 @@ async def get_instance_status(instanceId: str, request: Request) -> InstanceRunt
 
     host_row = await db.get_host(inst_row["host_id"])
     if host_row is None:
-        raise HTTPException(status_code=404, detail=f"Host {inst_row['host_id']!r} not found")
+        raise HTTPException(
+            status_code=404, detail=f"Host {inst_row['host_id']!r} not found"
+        )
 
     runtime = await _fetch_runtime(host_row, inst_row["service_name"])
     return runtime
@@ -169,16 +176,20 @@ async def upload_instance_mission(instanceId: str, request: Request) -> dict:
 
     host_row = await db.get_host(inst_row["host_id"])
     if host_row is None:
-        raise HTTPException(status_code=404, detail=f"Host {inst_row['host_id']!r} not found")
+        raise HTTPException(
+            status_code=404, detail=f"Host {inst_row['host_id']!r} not found"
+        )
 
     filename = ""
     cd = request.headers.get("Content-Disposition", "")
     for part in cd.split(";"):
         part = part.strip()
         if part.startswith("filename="):
-            filename = part[len("filename="):].strip().strip('"')
+            filename = part[len("filename=") :].strip().strip('"')
     if not filename:
-        raise HTTPException(status_code=400, detail="Missing filename in Content-Disposition header")
+        raise HTTPException(
+            status_code=400, detail="Missing filename in Content-Disposition header"
+        )
     if not filename.lower().endswith(".miz"):
         raise HTTPException(status_code=400, detail="Only .miz files are accepted")
 
@@ -186,7 +197,9 @@ async def upload_instance_mission(instanceId: str, request: Request) -> dict:
     agent_base = host_row["agent_url"].rstrip("/") + "/agent/v1"
     try:
         async with AgentClient(agent_base, host_row["agent_api_key"]) as agent:
-            result = await agent.upload_mission(inst_row["service_name"], filename, data)
+            result = await agent.upload_mission(
+                inst_row["service_name"], filename, data
+            )
         return result
     except AgentError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.detail)
@@ -199,7 +212,9 @@ async def list_instance_missions(instanceId: str, request: Request) -> dict:
 
     host_row = await db.get_host(inst_row["host_id"])
     if host_row is None:
-        raise HTTPException(status_code=404, detail=f"Host {inst_row['host_id']!r} not found")
+        raise HTTPException(
+            status_code=404, detail=f"Host {inst_row['host_id']!r} not found"
+        )
 
     agent_base = host_row["agent_url"].rstrip("/") + "/agent/v1"
     try:
@@ -211,32 +226,42 @@ async def list_instance_missions(instanceId: str, request: Request) -> dict:
 
 
 @router.post("/instances/{instanceId}/missions/{filename}/copy-to-active")
-async def copy_instance_mission_to_active(instanceId: str, filename: str, request: Request) -> dict:
+async def copy_instance_mission_to_active(
+    instanceId: str, filename: str, request: Request
+) -> dict:
     """Copy a .miz from the instance's missions folder into the shared Active Missions folder."""
     db: Database = request.app.state.db
     inst_row = await _get_instance_or_404(db, instanceId)
 
     host_row = await db.get_host(inst_row["host_id"])
     if host_row is None:
-        raise HTTPException(status_code=404, detail=f"Host {inst_row['host_id']!r} not found")
+        raise HTTPException(
+            status_code=404, detail=f"Host {inst_row['host_id']!r} not found"
+        )
 
     agent_base = host_row["agent_url"].rstrip("/") + "/agent/v1"
     try:
         async with AgentClient(agent_base, host_row["agent_api_key"]) as client:
-            return await client.copy_mission_to_active(inst_row["service_name"], filename)
+            return await client.copy_mission_to_active(
+                inst_row["service_name"], filename
+            )
     except AgentError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.detail)
 
 
 @router.delete("/instances/{instanceId}/missions/{filename}", status_code=204)
-async def delete_instance_mission(instanceId: str, filename: str, request: Request) -> Response:
+async def delete_instance_mission(
+    instanceId: str, filename: str, request: Request
+) -> Response:
     """Proxy a mission delete request to the agent."""
     db: Database = request.app.state.db
     inst_row = await _get_instance_or_404(db, instanceId)
 
     host_row = await db.get_host(inst_row["host_id"])
     if host_row is None:
-        raise HTTPException(status_code=404, detail=f"Host {inst_row['host_id']!r} not found")
+        raise HTTPException(
+            status_code=404, detail=f"Host {inst_row['host_id']!r} not found"
+        )
 
     agent_base = host_row["agent_url"].rstrip("/") + "/agent/v1"
     try:

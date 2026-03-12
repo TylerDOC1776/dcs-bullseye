@@ -60,11 +60,13 @@ def create_app(config: AgentConfig) -> FastAPI:
 
     # Global exception handlers → Problem JSON
     @app.exception_handler(HTTPException)
-    async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
+    async def http_exception_handler(
+        request: Request, exc: HTTPException
+    ) -> JSONResponse:
         return JSONResponse(
             status_code=exc.status_code,
             content=Problem(
-                type=f"about:blank",
+                type="about:blank",
                 title=_http_status_phrase(exc.status_code),
                 status=exc.status_code,
                 detail=exc.detail,
@@ -72,7 +74,9 @@ def create_app(config: AgentConfig) -> FastAPI:
         )
 
     @app.exception_handler(Exception)
-    async def general_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    async def general_exception_handler(
+        request: Request, exc: Exception
+    ) -> JSONResponse:
         logger.exception("Unhandled exception: %s", exc)
         return JSONResponse(
             status_code=500,
@@ -104,7 +108,9 @@ def create_app(config: AgentConfig) -> FastAPI:
         # Auto-start any instances flagged with auto_start=True that aren't already running
         auto_instances = [i for i in config.instances if i.auto_start]
         if auto_instances:
-            asyncio.create_task(_auto_start_instances(app.state.controller, auto_instances))
+            asyncio.create_task(
+                _auto_start_instances(app.state.controller, auto_instances)
+            )
 
         # Analytics reporter -- push player/mission events to orchestrator
         asyncio.create_task(run_reporter(config, app.state.controller))
@@ -116,7 +122,9 @@ def create_app(config: AgentConfig) -> FastAPI:
             try:
                 status = await loop.run_in_executor(None, ctrl.status, inst)
                 if status != "SERVICE_RUNNING":
-                    logger.info("Auto-starting instance %s (was: %s)", inst.service_name, status)
+                    logger.info(
+                        "Auto-starting instance %s (was: %s)", inst.service_name, status
+                    )
                     await loop.run_in_executor(None, ctrl.start, inst)
                 else:
                     logger.info("Auto-start: %s already running", inst.service_name)
@@ -128,6 +136,7 @@ def create_app(config: AgentConfig) -> FastAPI:
 
 def _http_status_phrase(code: int) -> str:
     import http
+
     try:
         return http.HTTPStatus(code).phrase
     except ValueError:

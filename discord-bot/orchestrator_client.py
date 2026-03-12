@@ -58,7 +58,9 @@ class OrchestratorClient:
         return self._client
 
     async def _get(self, path: str, **params: Any) -> Any:
-        resp = await self._http.get(path, params={k: v for k, v in params.items() if v is not None})
+        resp = await self._http.get(
+            path, params={k: v for k, v in params.items() if v is not None}
+        )
         self._raise_for_status(resp)
         return resp.json()
 
@@ -126,7 +128,9 @@ class OrchestratorClient:
     async def list_jobs(self, status: str | None = None) -> list[dict]:
         return await self._get("/jobs", status=status)
 
-    async def create_invite(self, host_name: str = "", expires_in_hours: int | None = None) -> dict:
+    async def create_invite(
+        self, host_name: str = "", expires_in_hours: int | None = None
+    ) -> dict:
         body: dict = {}
         if host_name:
             body["hostName"] = host_name
@@ -155,7 +159,9 @@ class OrchestratorClient:
         data = await self._get(f"/hosts/{host_id}/missions")
         return data.get("items", [])
 
-    async def upload_active_mission(self, host_id: str, filename: str, data: bytes) -> dict:
+    async def upload_active_mission(
+        self, host_id: str, filename: str, data: bytes
+    ) -> dict:
         resp = await self._http.post(
             f"/hosts/{host_id}/missions/upload",
             content=data,
@@ -178,7 +184,9 @@ class OrchestratorClient:
         return resp.json()
 
     async def copy_mission_to_active(self, instance_id: str, filename: str) -> dict:
-        return await self._post(f"/instances/{instance_id}/missions/{filename}/copy-to-active")
+        return await self._post(
+            f"/instances/{instance_id}/missions/{filename}/copy-to-active"
+        )
 
     async def remove_host(self, host_id: str) -> None:
         await self._delete(f"/hosts/{host_id}")
@@ -198,4 +206,6 @@ class OrchestratorClient:
         since: str | None = None,
         limit: int = 2000,
     ) -> list[dict]:
-        return await self._get("/analytics/events", instance_id=instance_id, since=since, limit=limit)
+        return await self._get(
+            "/analytics/events", instance_id=instance_id, since=since, limit=limit
+        )

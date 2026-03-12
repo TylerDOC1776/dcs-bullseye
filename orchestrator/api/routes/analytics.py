@@ -22,7 +22,7 @@ router = APIRouter()
 
 class AnalyticsEvent(BaseModel):
     instance_id: str | None = None
-    event_type: str          # player_join | player_leave | mission_start | mission_end
+    event_type: str  # player_join | player_leave | mission_start | mission_end
     player_name: str | None = None
     mission_name: str | None = None
     map: str | None = None
@@ -60,7 +60,11 @@ async def ingest_events(
         logger.debug("[analytics] %s wrote %d event(s)", x_host_id, len(batch.events))
 
 
-@router.get("/analytics/events", response_model=list[dict[str, Any]], dependencies=[Depends(require_api_key)])
+@router.get(
+    "/analytics/events",
+    response_model=list[dict[str, Any]],
+    dependencies=[Depends(require_api_key)],
+)
 async def query_events(
     request: Request,
     host_id: str | None = None,

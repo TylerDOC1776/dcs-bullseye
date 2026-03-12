@@ -17,7 +17,12 @@ from fastapi import APIRouter, HTTPException, Request, Response
 from ...config import InstanceConfig
 from ...controller import DcsController
 from ...security import safe_join, sanitize_miz_filename
-from ..models import InstanceRuntime, InstanceStatus, InstanceSummary, nssm_to_instance_status
+from ..models import (
+    InstanceRuntime,
+    InstanceStatus,
+    InstanceSummary,
+    nssm_to_instance_status,
+)
 
 router = APIRouter()
 
@@ -116,9 +121,11 @@ async def upload_mission(instanceId: str, request: Request) -> dict:
     for part in cd.split(";"):
         part = part.strip()
         if part.startswith("filename="):
-            raw_filename = part[len("filename="):].strip().strip('"')
+            raw_filename = part[len("filename=") :].strip().strip('"')
     if not raw_filename:
-        raise HTTPException(status_code=400, detail="Missing filename in Content-Disposition header")
+        raise HTTPException(
+            status_code=400, detail="Missing filename in Content-Disposition header"
+        )
 
     try:
         filename = sanitize_miz_filename(raw_filename)
@@ -127,7 +134,10 @@ async def upload_mission(instanceId: str, request: Request) -> dict:
 
     data = await request.body()
     if len(data) > config.max_upload_bytes:
-        raise HTTPException(status_code=413, detail=f"File too large (max {config.max_upload_bytes // (1024*1024)} MB)")
+        raise HTTPException(
+            status_code=413,
+            detail=f"File too large (max {config.max_upload_bytes // (1024 * 1024)} MB)",
+        )
 
     missions_dir = Path(inst.missions_dir)
     missions_dir.mkdir(parents=True, exist_ok=True)
@@ -136,7 +146,9 @@ async def upload_mission(instanceId: str, request: Request) -> dict:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     if dest.exists():
-        raise HTTPException(status_code=409, detail=f"A file named {filename!r} already exists")
+        raise HTTPException(
+            status_code=409, detail=f"A file named {filename!r} already exists"
+        )
     dest.write_bytes(data)
     return {"path": str(dest), "filename": filename, "size": len(data)}
 
@@ -172,7 +184,9 @@ async def delete_mission(instanceId: str, filename: str, request: Request) -> Re
 
 
 @router.post("/instances/{instanceId}/missions/{filename}/copy-to-active")
-async def copy_mission_to_active(instanceId: str, filename: str, request: Request) -> dict:
+async def copy_mission_to_active(
+    instanceId: str, filename: str, request: Request
+) -> dict:
     """Copy a .miz from the instance's missions_dir into active_missions_dir."""
     config = request.app.state.config
     ctrl: DcsController = request.app.state.controller
@@ -183,7 +197,9 @@ async def copy_mission_to_active(instanceId: str, filename: str, request: Reques
         raise HTTPException(status_code=400, detail=str(exc))
     loop = asyncio.get_running_loop()
     try:
-        result = await loop.run_in_executor(None, ctrl.copy_mission_to_active, inst, filename)
+        result = await loop.run_in_executor(
+            None, ctrl.copy_mission_to_active, inst, filename
+        )
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
     except ValueError as exc:
@@ -197,19 +213,25 @@ async def list_active_missions(request: Request) -> dict:
     config = request.app.state.config
     active_dir = config.active_missions_dir
     if not active_dir:
-        raise HTTPException(status_code=404, detail="active_missions_dir not configured")
+        raise HTTPException(
+            status_code=404, detail="active_missions_dir not configured"
+        )
     root = Path(active_dir)
     if not root.exists():
         return {"items": []}
     items = []
     for miz in sorted(root.glob("*.miz")):
-        items.append({
-            "path": str(miz),
-            "name": miz.stem,
-            "relative_path": miz.name,
-            "size_bytes": miz.stat().st_size,
-            "modified_at": datetime.fromtimestamp(miz.stat().st_mtime, tz=timezone.utc).isoformat(),
-        })
+        items.append(
+            {
+                "path": str(miz),
+                "name": miz.stem,
+                "relative_path": miz.name,
+                "size_bytes": miz.stat().st_size,
+                "modified_at": datetime.fromtimestamp(
+                    miz.stat().st_mtime, tz=timezone.utc
+                ).isoformat(),
+            }
+        )
     return {"items": items}
 
 
@@ -217,10 +239,13 @@ async def list_active_missions(request: Request) -> dict:
 async def download_active_mission(filename: str, request: Request) -> Response:
     """Download a .miz file from active_missions_dir root."""
     from fastapi.responses import FileResponse
+
     config = request.app.state.config
     active_dir = config.active_missions_dir
     if not active_dir:
-        raise HTTPException(status_code=404, detail="active_missions_dir not configured")
+        raise HTTPException(
+            status_code=404, detail="active_missions_dir not configured"
+        )
     try:
         filename = sanitize_miz_filename(filename)
     except ValueError as exc:
@@ -245,9 +270,11 @@ async def upload_active_mission(request: Request) -> dict:
     for part in cd.split(";"):
         part = part.strip()
         if part.startswith("filename="):
-            raw_filename = part[len("filename="):].strip().strip('"')
+            raw_filename = part[len("filename=") :].strip().strip('"')
     if not raw_filename:
-        raise HTTPException(status_code=400, detail="Missing filename in Content-Disposition header")
+        raise HTTPException(
+            status_code=400, detail="Missing filename in Content-Disposition header"
+        )
 
     try:
         filename = sanitize_miz_filename(raw_filename)
@@ -256,11 +283,16 @@ async def upload_active_mission(request: Request) -> dict:
 
     data = await request.body()
     if len(data) > config.max_upload_bytes:
-        raise HTTPException(status_code=413, detail=f"File too large (max {config.max_upload_bytes // (1024*1024)} MB)")
+        raise HTTPException(
+            status_code=413,
+            detail=f"File too large (max {config.max_upload_bytes // (1024 * 1024)} MB)",
+        )
 
     loop = asyncio.get_running_loop()
     try:
-        result = await loop.run_in_executor(None, ctrl.upload_active_mission, filename, data)
+        result = await loop.run_in_executor(
+            None, ctrl.upload_active_mission, filename, data
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     return result
@@ -273,7 +305,6 @@ async def delete_active_mission(filename: str, request: Request) -> dict:
         filename = sanitize_miz_filename(filename)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-    config = request.app.state.config
     ctrl: DcsController = request.app.state.controller
     loop = asyncio.get_running_loop()
     try:

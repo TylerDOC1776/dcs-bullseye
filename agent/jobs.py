@@ -8,16 +8,16 @@ The store is not persisted — agent restart clears all jobs.
 from __future__ import annotations
 
 import secrets
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
 
 @dataclass
 class Job:
-    id: str                          # "job_<12-hex>"
-    type: str                        # action name e.g. "start"
-    status: str                      # queued | running | succeeded | failed
+    id: str  # "job_<12-hex>"
+    type: str  # action name e.g. "start"
+    status: str  # queued | running | succeeded | failed
     instance_id: str | None
     created_at: datetime
     started_at: datetime | None = None

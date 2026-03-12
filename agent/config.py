@@ -22,38 +22,47 @@ class ConfigError(Exception):
 
 @dataclass
 class InstanceConfig:
-    name: str               # human label e.g. "Server 1"
-    service_name: str       # NSSM service name e.g. "DCS-server1"
-    exe_path: str           # full path to DCS_server.exe
-    saved_games_key: str    # -w argument e.g. "DCS.server1"
-    log_path: str           # dcs.log path for tailing
-    missions_dir: str       # missions directory
+    name: str  # human label e.g. "Server 1"
+    service_name: str  # NSSM service name e.g. "DCS-server1"
+    exe_path: str  # full path to DCS_server.exe
+    saved_games_key: str  # -w argument e.g. "DCS.server1"
+    log_path: str  # dcs.log path for tailing
+    missions_dir: str  # missions directory
     auto_start: bool = True
     ports: dict = field(default_factory=dict)  # game/webgui/srs/tacview
-    manager: str = "nssm"   # "nssm" or "task" (Windows Task Scheduler)
+    manager: str = "nssm"  # "nssm" or "task" (Windows Task Scheduler)
 
 
 @dataclass
 class AgentConfig:
     instances: list[InstanceConfig]
-    nssm_path: str = "nssm"                          # path to nssm.exe or just "nssm" if on PATH
+    nssm_path: str = "nssm"  # path to nssm.exe or just "nssm" if on PATH
     log_dir: str = r"C:\ProgramData\DCSAgent\logs"
-    api_key: str = ""                                # X-API-Key; empty = auth disabled (dev mode)
+    api_key: str = ""  # X-API-Key; empty = auth disabled (dev mode)
     host: str = "0.0.0.0"
     port: int = 8787
-    active_missions_dir: str = ""                    # shared mission library folder (walked by /missions)
-    max_upload_bytes: int = 100 * 1024 * 1024        # max .miz upload size (default 100 MB)
-    orchestrator_url: str = ""                       # e.g. https://my-vps:8888 --� set by installer
-    host_id: str = ""                                # assigned by orchestrator at registration
+    active_missions_dir: str = ""  # shared mission library folder (walked by /missions)
+    max_upload_bytes: int = 100 * 1024 * 1024  # max .miz upload size (default 100 MB)
+    orchestrator_url: str = ""  # e.g. https://my-vps:8888 --� set by installer
+    host_id: str = ""  # assigned by orchestrator at registration
 
 
 def _parse_instances(raw: list[dict[str, Any]]) -> list[InstanceConfig]:
     parsed: list[InstanceConfig] = []
     for item in raw:
-        required = ("name", "service_name", "exe_path", "saved_games_key", "log_path", "missions_dir")
+        required = (
+            "name",
+            "service_name",
+            "exe_path",
+            "saved_games_key",
+            "log_path",
+            "missions_dir",
+        )
         missing = [f for f in required if not item.get(f)]
         if missing:
-            raise ConfigError(f"Instance {item.get('name', '?')!r} missing fields: {', '.join(missing)}")
+            raise ConfigError(
+                f"Instance {item.get('name', '?')!r} missing fields: {', '.join(missing)}"
+            )
         parsed.append(
             InstanceConfig(
                 name=item["name"],

@@ -167,7 +167,9 @@ class Database:
         row = await self._get_row("SELECT * FROM hosts WHERE id = ?", (host_id,))
         return _host_row_to_dict(row) if row else None
 
-    async def update_host(self, host_id: str, fields: dict[str, Any]) -> dict[str, Any] | None:
+    async def update_host(
+        self, host_id: str, fields: dict[str, Any]
+    ) -> dict[str, Any] | None:
         allowed = {"name", "agent_url", "agent_api_key", "tags", "notes", "is_enabled"}
         updates = {k: v for k, v in fields.items() if k in allowed}
         if not updates:
@@ -182,9 +184,7 @@ class Database:
         set_clause = ", ".join(f"{k} = ?" for k in updates)
         values = list(updates.values()) + [host_id]
         assert self._conn
-        await self._conn.execute(
-            f"UPDATE hosts SET {set_clause} WHERE id = ?", values
-        )
+        await self._conn.execute(f"UPDATE hosts SET {set_clause} WHERE id = ?", values)
         await self._conn.commit()
         return await self.get_host(host_id)
 
@@ -247,7 +247,9 @@ class Database:
 
     async def get_instance(self, instance_id: str) -> dict[str, Any] | None:
         """Look up by DB id first, then fall back to service_name or name (case-insensitive)."""
-        row = await self._get_row("SELECT * FROM instances WHERE id = ?", (instance_id,))
+        row = await self._get_row(
+            "SELECT * FROM instances WHERE id = ?", (instance_id,)
+        )
         if row is None:
             row = await self._get_row(
                 "SELECT * FROM instances WHERE lower(service_name) = lower(?) OR lower(name) = lower(?)",
@@ -266,6 +268,7 @@ class Database:
     ) -> dict[str, Any]:
         """Create a human-readable invite code."""
         import random
+
         charset = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"  # no 0/O, 1/I/l ambiguity
         code = "GOON-" + "-".join(
             "".join(random.choices(charset, k=4)) for _ in range(3)
@@ -352,7 +355,17 @@ class Database:
                     (id, timestamp, actor, action, instance_id, host_id, job_id, status, detail)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (log_id, _now_iso(), actor, action, instance_id, host_id, job_id, status, detail),
+                (
+                    log_id,
+                    _now_iso(),
+                    actor,
+                    action,
+                    instance_id,
+                    host_id,
+                    job_id,
+                    status,
+                    detail,
+                ),
             )
             await self._conn.commit()
         except Exception:
@@ -382,7 +395,9 @@ class Database:
     # Analytics
     # ------------------------------------------------------------------
 
-    async def get_host_by_agent_key(self, host_id: str, agent_api_key: str) -> dict[str, Any] | None:
+    async def get_host_by_agent_key(
+        self, host_id: str, agent_api_key: str
+    ) -> dict[str, Any] | None:
         """Return host row if host_id + agent_api_key match, else None."""
         row = await self._get_row(
             "SELECT * FROM hosts WHERE id = ? AND agent_api_key = ?",
@@ -409,7 +424,16 @@ class Database:
                 (id, timestamp, host_id, instance_id, event_type, player_name, mission_name, map)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (event_id, ts, host_id, instance_id, event_type, player_name, mission_name, map),
+            (
+                event_id,
+                ts,
+                host_id,
+                instance_id,
+                event_type,
+                player_name,
+                mission_name,
+                map,
+            ),
         )
         await self._conn.commit()
 

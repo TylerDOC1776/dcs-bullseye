@@ -5,7 +5,6 @@ Background tasks are not awaited in these tests — we only verify the
 synchronous response (202 JobAccepted) and that the job appears in the store.
 """
 
-import pytest
 from fastapi.testclient import TestClient
 
 from .conftest import HEADERS
@@ -75,9 +74,7 @@ def test_action_requires_auth(client: TestClient) -> None:
 
 
 def test_action_unknown_instance(client: TestClient) -> None:
-    resp = client.post(
-        "/agent/v1/instances/nonexistent/actions/start", headers=HEADERS
-    )
+    resp = client.post("/agent/v1/instances/nonexistent/actions/start", headers=HEADERS)
     assert resp.status_code == 404
 
 

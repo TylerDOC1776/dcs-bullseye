@@ -33,7 +33,15 @@ from ..models import JobAccepted
 
 router = APIRouter()
 
-_SUPPORTED_ACTIONS = {"start", "stop", "restart", "logs_bundle", "mission_load", "reset_persist", "set_password"}
+_SUPPORTED_ACTIONS = {
+    "start",
+    "stop",
+    "restart",
+    "logs_bundle",
+    "mission_load",
+    "reset_persist",
+    "set_password",
+}
 _UNSUPPORTED_ACTIONS = {"update"}
 _POLL_INTERVAL = 2.0
 _TIMEOUT_SECONDS = 300
@@ -86,7 +94,9 @@ async def _run_action(
     try:
         async with AgentClient(agent_base, host_row["agent_api_key"]) as client:
             try:
-                accepted = await client.trigger_action(service_name, action, body=params)
+                accepted = await client.trigger_action(
+                    service_name, action, body=params
+                )
             except AgentError as exc:
                 job.status = "failed"
                 job.error = {"message": f"Agent rejected action: {exc.detail}"}
@@ -125,7 +135,9 @@ async def _run_action(
                     job.error = agent_job.get("error")
                     job.finished_at = datetime.now(timezone.utc)
                     store.update(job)
-                    event_type = "job.succeeded" if agent_status == "succeeded" else "job.failed"
+                    event_type = (
+                        "job.succeeded" if agent_status == "succeeded" else "job.failed"
+                    )
                     bus.publish(_job_event(event_type, job))
                     await _audit(agent_status, job.error or job.result)
                     return
@@ -189,11 +201,15 @@ async def trigger_action(
 
     inst_row = await db.get_instance(instanceId)
     if inst_row is None:
-        raise HTTPException(status_code=404, detail=f"Instance {instanceId!r} not found")
+        raise HTTPException(
+            status_code=404, detail=f"Instance {instanceId!r} not found"
+        )
 
     host_row = await db.get_host(inst_row["host_id"])
     if host_row is None:
-        raise HTTPException(status_code=404, detail=f"Host {inst_row['host_id']!r} not found")
+        raise HTTPException(
+            status_code=404, detail=f"Host {inst_row['host_id']!r} not found"
+        )
 
     job = store.create(
         type=action,
@@ -212,7 +228,9 @@ async def trigger_action(
     )
 
     asyncio.create_task(
-        _run_action(job, store, bus, db, host_row, inst_row["service_name"], action, params)
+        _run_action(
+            job, store, bus, db, host_row, inst_row["service_name"], action, params
+        )
     )
 
     return JSONResponse(

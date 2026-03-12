@@ -8,7 +8,6 @@ synchronous response (202 + jobId) and auth/validation behaviour.
 
 from unittest.mock import AsyncMock, patch
 
-import pytest
 from fastapi.testclient import TestClient
 
 from .conftest import HEADERS
@@ -85,16 +84,12 @@ def test_unsupported_action(client: TestClient, instance_id: str) -> None:
 
 
 def test_unknown_action(client: TestClient, instance_id: str) -> None:
-    resp = client.post(
-        f"/api/v1/instances/{instance_id}/actions/nuke", headers=HEADERS
-    )
+    resp = client.post(f"/api/v1/instances/{instance_id}/actions/nuke", headers=HEADERS)
     assert resp.status_code == 400
 
 
 def test_action_unknown_instance(client: TestClient) -> None:
-    resp = client.post(
-        "/api/v1/instances/nonexistent/actions/start", headers=HEADERS
-    )
+    resp = client.post("/api/v1/instances/nonexistent/actions/start", headers=HEADERS)
     assert resp.status_code == 404
 
 

@@ -65,7 +65,9 @@ async def _sse_generator(
 @router.get("/events/stream")
 async def sse_stream(
     request: Request,
-    types: str | None = Query(None, description="Comma-separated event types to include"),
+    types: str | None = Query(
+        None, description="Comma-separated event types to include"
+    ),
     instanceId: str | None = Query(None),
     hostId: str | None = Query(None),
 ) -> StreamingResponse:
@@ -86,7 +88,9 @@ async def sse_stream(
 async def recent_events(
     request: Request,
     limit: int = Query(100, ge=1, le=500),
-    since: str | None = Query(None, description="ISO 8601 — return events at or after this time"),
+    since: str | None = Query(
+        None, description="ISO 8601 — return events at or after this time"
+    ),
     types: str | None = Query(None),
     instanceId: str | None = Query(None),
     hostId: str | None = Query(None),
