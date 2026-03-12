@@ -149,7 +149,7 @@ function agentHook.onPlayerConnect(id)
 	write_status()
 end
 
-function agentHook.onPlayerDisconnect(id, err)
+function agentHook.onPlayerDisconnect(id, _err)
 	_remove_player(id)
 	write_status()
 end
