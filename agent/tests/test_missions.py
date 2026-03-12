@@ -11,9 +11,7 @@ def test_list_missions_empty(client: TestClient) -> None:
     assert resp.json() == {"items": []}
 
 
-def test_list_missions_with_files(
-    client: TestClient, missions_dir: Path
-) -> None:
+def test_list_missions_with_files(client: TestClient, missions_dir: Path) -> None:
     (missions_dir / "goonfront_v0_3.miz").write_bytes(b"")
     (missions_dir / "red_flag.miz").write_bytes(b"")
     (missions_dir / "readme.txt").write_text("not a mission")

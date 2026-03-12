@@ -30,9 +30,9 @@ _DAILY_RESTART_TIME = dt_time(hour=5, minute=0, tzinfo=_EASTERN)  # 05:00 ET
 _MISSION_TIME_RESTART_THRESHOLD = 48 * 3600  # 48 hours in seconds
 
 _STATUS_COLOURS: dict[str, int] = {
-    "running":  0x2ECC71,
-    "stopped":  0xE74C3C,
-    "error":    0xE74C3C,
+    "running": 0x2ECC71,
+    "stopped": 0xE74C3C,
+    "error": 0xE74C3C,
     "starting": 0xE67E22,
     "stopping": 0xE67E22,
 }
@@ -161,9 +161,12 @@ def _instances_summary_embed(instances: list[dict]) -> discord.Embed:
         status = runtime.get("status", "unknown")
         running = status == "running"
         dot = (
-            "🟢" if status == "running"
-            else "🔴" if status in ("stopped", "error")
-            else "🟡" if status in ("starting", "stopping")
+            "🟢"
+            if status == "running"
+            else "🔴"
+            if status in ("stopped", "error")
+            else "🟡"
+            if status in ("starting", "stopping")
             else "⚫"
         )
         lines = [f"{dot} {status.title()}"]
@@ -239,8 +242,10 @@ def _instance_embed(instance: dict) -> discord.Embed:
 def _job_embed(job: dict, title: str = "Job result") -> discord.Embed:
     job_status = job.get("status", "unknown")
     colour = (
-        0x2ECC71 if job_status == "succeeded"
-        else 0xE74C3C if job_status == "failed"
+        0x2ECC71
+        if job_status == "succeeded"
+        else 0xE74C3C
+        if job_status == "failed"
         else _COLOUR_UNKNOWN
     )
     embed = discord.Embed(title=title, colour=colour)
@@ -254,6 +259,7 @@ def _job_embed(job: dict, title: str = "Job result") -> discord.Embed:
 # ------------------------------------------------------------------ #
 # Confirm view (two-step button confirmation)                           #
 # ------------------------------------------------------------------ #
+
 
 class _ConfirmView(discord.ui.View):
     """Ephemeral yes/no confirmation. Check `view.confirmed` after `await view.wait()`."""
@@ -287,27 +293,27 @@ class _ConfirmView(discord.ui.View):
 _KEEPALIVE_COOLDOWN = 20 * 60  # seconds between restart attempts per instance
 
 _UPDATE_PHASE_COLOURS: dict[str, int] = {
-    "starting":   0xE67E22,
-    "stopping":   0xE67E22,
-    "updating":   0x3498DB,
+    "starting": 0xE67E22,
+    "stopping": 0xE67E22,
+    "updating": 0x3498DB,
     "restarting": 0xE67E22,
-    "complete":   0x2ECC71,
-    "failed":     0xE74C3C,
+    "complete": 0x2ECC71,
+    "failed": 0xE74C3C,
 }
 _UPDATE_PHASE_ICONS: dict[str, str] = {
-    "starting":   "🔄",
-    "stopping":   "🛑",
-    "updating":   "⬇️",
+    "starting": "🔄",
+    "stopping": "🛑",
+    "updating": "⬇️",
     "restarting": "🔁",
-    "complete":   "✅",
-    "failed":     "❌",
+    "complete": "✅",
+    "failed": "❌",
 }
 
 
 def _update_phase_embed(host: str, phase: str, message: str) -> discord.Embed:
     colour = _UPDATE_PHASE_COLOURS.get(phase, 0x95A5A6)
-    icon   = _UPDATE_PHASE_ICONS.get(phase, "🔄")
-    embed  = discord.Embed(
+    icon = _UPDATE_PHASE_ICONS.get(phase, "🔄")
+    embed = discord.Embed(
         title=f"{icon} DCS Update — `{host}`",
         description=message,
         colour=colour,
@@ -317,7 +323,9 @@ def _update_phase_embed(host: str, phase: str, message: str) -> discord.Embed:
 
 
 class DcsCog(commands.Cog):
-    def __init__(self, config: BotConfig, client: OrchestratorClient, bot: commands.Bot) -> None:
+    def __init__(
+        self, config: BotConfig, client: OrchestratorClient, bot: commands.Bot
+    ) -> None:
         self.config = config
         self.client = client
         self._bot = bot
@@ -411,7 +419,10 @@ class DcsCog(commands.Cog):
         # External servers — TCP port-check only
         if self.config.external_servers:
             results = await asyncio.gather(
-                *[_check_port(s["ip"], s["port"]) for s in self.config.external_servers],
+                *[
+                    _check_port(s["ip"], s["port"])
+                    for s in self.config.external_servers
+                ],
                 return_exceptions=True,
             )
             for srv, online in zip(self.config.external_servers, results):
@@ -425,7 +436,8 @@ class DcsCog(commands.Cog):
                 )
 
         embed.set_footer(
-            text="Updated " + datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+            text="Updated "
+            + datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
             + " · auto-restarts daily at 05:00 ET after 48 h mission time"
         )
         msg = await self._get_or_create_status_message(channel)
@@ -474,7 +486,9 @@ class DcsCog(commands.Cog):
                     f"🔄 Auto-restarting **{name}** — mission time {time_str}, 0 players online."
                 )
             try:
-                await self.client.trigger_action(inst["id"], "restart", actor_id="system")
+                await self.client.trigger_action(
+                    inst["id"], "restart", actor_id="system"
+                )
             except Exception as exc:
                 log.error("Auto-restart failed for %s: %s", name, exc)
                 if channel:
@@ -507,15 +521,23 @@ class DcsCog(commands.Cog):
             last = self._keepalive_last_attempt.get(instance_id)
             if last is not None and now - last < _KEEPALIVE_COOLDOWN:
                 remaining = int(_KEEPALIVE_COOLDOWN - (now - last))
-                log.debug("Keepalive: %s in cooldown (%ds remaining), skipping", name, remaining)
+                log.debug(
+                    "Keepalive: %s in cooldown (%ds remaining), skipping",
+                    name,
+                    remaining,
+                )
                 continue
 
             self._keepalive_last_attempt[instance_id] = now
             log.info("Keepalive: starting stopped instance %s", name)
             if channel:
-                await channel.send(f"🔁 Auto-starting **{name}** — instance was stopped.")
+                await channel.send(
+                    f"🔁 Auto-starting **{name}** — instance was stopped."
+                )
             try:
-                await self.client.trigger_action(instance_id, "start", actor_id="system")
+                await self.client.trigger_action(
+                    instance_id, "start", actor_id="system"
+                )
             except Exception as exc:
                 log.error("Keepalive: start failed for %s: %s", name, exc)
                 if channel:
@@ -560,7 +582,10 @@ class DcsCog(commands.Cog):
         # ---- channel guard ----------------------------------------- #
 
         async def _check_channel(interaction: discord.Interaction) -> bool:
-            if config.bot_channel_id and interaction.channel_id != config.bot_channel_id:
+            if (
+                config.bot_channel_id
+                and interaction.channel_id != config.bot_channel_id
+            ):
                 await interaction.response.send_message(
                     f"This command only works in <#{config.bot_channel_id}>.",
                     ephemeral=True,
@@ -698,7 +723,9 @@ class DcsCog(commands.Cog):
                     if filename in seen:
                         continue
                     seen.add(filename)
-                    stem = filename[:-4] if filename.lower().endswith(".miz") else filename
+                    stem = (
+                        filename[:-4] if filename.lower().endswith(".miz") else filename
+                    )
                     count = play_counts.get(stem, 0)
                     label = filename
                     if count:
@@ -706,12 +733,17 @@ class DcsCog(commands.Cog):
                     candidates.append((count, label, f"{host['id']}::{filename}"))
 
             candidates.sort(key=lambda x: -x[0])
-            choices = [app_commands.Choice(name=c[1][:100], value=c[2]) for c in candidates[:24]]
+            choices = [
+                app_commands.Choice(name=c[1][:100], value=c[2])
+                for c in candidates[:24]
+            ]
             if len(candidates) > 24:
-                choices.append(app_commands.Choice(
-                    name=f"... {len(candidates) - 24} more — type to search",
-                    value="__hint__",
-                ))
+                choices.append(
+                    app_commands.Choice(
+                        name=f"... {len(candidates) - 24} more — type to search",
+                        value="__hint__",
+                    )
+                )
             return choices
 
         # ---- job poller -------------------------------------------- #
@@ -730,7 +762,9 @@ class DcsCog(commands.Cog):
         # /dcs status [instance]                                            #
         # ---------------------------------------------------------------- #
 
-        @self.dcs.command(name="status", description="Show status of one or all instances")
+        @self.dcs.command(
+            name="status", description="Show status of one or all instances"
+        )
         @app_commands.describe(instance="Instance to check (leave blank for all)")
         @app_commands.autocomplete(instance=_instance_autocomplete)
         async def cmd_status(
@@ -750,7 +784,9 @@ class DcsCog(commands.Cog):
                     if not instances:
                         await interaction.followup.send("No instances registered.")
                         return
-                    await interaction.followup.send(embed=_instances_summary_embed(instances))
+                    await interaction.followup.send(
+                        embed=_instances_summary_embed(instances)
+                    )
             except OrchestratorError as exc:
                 await interaction.followup.send(
                     f"Orchestrator error: {exc.detail}", ephemeral=True
@@ -763,23 +799,25 @@ class DcsCog(commands.Cog):
         @self.dcs.command(name="start", description="Start a DCS instance")
         @app_commands.describe(instance="Instance to start")
         @app_commands.autocomplete(instance=_instance_autocomplete)
-        async def cmd_start(
-            interaction: discord.Interaction, instance: str
-        ) -> None:
+        async def cmd_start(interaction: discord.Interaction, instance: str) -> None:
             if not await _check_channel(interaction):
                 return
             if not await _require_operator(interaction):
                 return
             await interaction.response.defer()
             try:
-                job_ref = await client.trigger_action(instance, "start", actor_id=str(interaction.user.id))
+                job_ref = await client.trigger_action(
+                    instance, "start", actor_id=str(interaction.user.id)
+                )
                 job = await _poll_job(job_ref["jobId"])
                 if job.get("status") not in _TERMINAL_STATES:
                     await interaction.followup.send(
                         f"Job still running — check `/dcs jobs` (job `{job_ref['jobId']}`)"
                     )
                     return
-                await interaction.followup.send(embed=_job_embed(job, f"Start: {instance}"))
+                await interaction.followup.send(
+                    embed=_job_embed(job, f"Start: {instance}")
+                )
             except OrchestratorError as exc:
                 await interaction.followup.send(
                     f"Orchestrator error: {exc.detail}", ephemeral=True
@@ -792,23 +830,25 @@ class DcsCog(commands.Cog):
         @self.dcs.command(name="stop", description="Stop a DCS instance")
         @app_commands.describe(instance="Instance to stop")
         @app_commands.autocomplete(instance=_instance_autocomplete)
-        async def cmd_stop(
-            interaction: discord.Interaction, instance: str
-        ) -> None:
+        async def cmd_stop(interaction: discord.Interaction, instance: str) -> None:
             if not await _check_channel(interaction):
                 return
             if not await _require_operator(interaction):
                 return
             await interaction.response.defer()
             try:
-                job_ref = await client.trigger_action(instance, "stop", actor_id=str(interaction.user.id))
+                job_ref = await client.trigger_action(
+                    instance, "stop", actor_id=str(interaction.user.id)
+                )
                 job = await _poll_job(job_ref["jobId"])
                 if job.get("status") not in _TERMINAL_STATES:
                     await interaction.followup.send(
                         f"Job still running — check `/dcs jobs` (job `{job_ref['jobId']}`)"
                     )
                     return
-                await interaction.followup.send(embed=_job_embed(job, f"Stop: {instance}"))
+                await interaction.followup.send(
+                    embed=_job_embed(job, f"Stop: {instance}")
+                )
             except OrchestratorError as exc:
                 await interaction.followup.send(
                     f"Orchestrator error: {exc.detail}", ephemeral=True
@@ -821,23 +861,25 @@ class DcsCog(commands.Cog):
         @self.dcs.command(name="restart", description="Restart a DCS instance")
         @app_commands.describe(instance="Instance to restart")
         @app_commands.autocomplete(instance=_instance_autocomplete)
-        async def cmd_restart(
-            interaction: discord.Interaction, instance: str
-        ) -> None:
+        async def cmd_restart(interaction: discord.Interaction, instance: str) -> None:
             if not await _check_channel(interaction):
                 return
             if not await _require_operator(interaction):
                 return
             await interaction.response.defer()
             try:
-                job_ref = await client.trigger_action(instance, "restart", actor_id=str(interaction.user.id))
+                job_ref = await client.trigger_action(
+                    instance, "restart", actor_id=str(interaction.user.id)
+                )
                 job = await _poll_job(job_ref["jobId"])
                 if job.get("status") not in _TERMINAL_STATES:
                     await interaction.followup.send(
                         f"Job still running — check `/dcs jobs` (job `{job_ref['jobId']}`)"
                     )
                     return
-                await interaction.followup.send(embed=_job_embed(job, f"Restart: {instance}"))
+                await interaction.followup.send(
+                    embed=_job_embed(job, f"Restart: {instance}")
+                )
             except OrchestratorError as exc:
                 await interaction.followup.send(
                     f"Orchestrator error: {exc.detail}", ephemeral=True
@@ -847,17 +889,19 @@ class DcsCog(commands.Cog):
         # /dcs logs <instance>                                              #
         # ---------------------------------------------------------------- #
 
-        @self.dcs.command(name="logs", description="Fetch a log bundle for a DCS instance")
+        @self.dcs.command(
+            name="logs", description="Fetch a log bundle for a DCS instance"
+        )
         @app_commands.describe(instance="Instance to fetch logs from")
         @app_commands.autocomplete(instance=_instance_autocomplete)
-        async def cmd_logs(
-            interaction: discord.Interaction, instance: str
-        ) -> None:
+        async def cmd_logs(interaction: discord.Interaction, instance: str) -> None:
             if not await _check_channel(interaction):
                 return
             await interaction.response.defer()
             try:
-                job_ref = await client.trigger_action(instance, "logs_bundle", actor_id=str(interaction.user.id))
+                job_ref = await client.trigger_action(
+                    instance, "logs_bundle", actor_id=str(interaction.user.id)
+                )
                 job = await _poll_job(job_ref["jobId"])
                 if job.get("status") not in _TERMINAL_STATES:
                     await interaction.followup.send(
@@ -865,7 +909,9 @@ class DcsCog(commands.Cog):
                     )
                     return
                 if job.get("status") == "failed":
-                    await interaction.followup.send(embed=_job_embed(job, f"Logs: {instance}"))
+                    await interaction.followup.send(
+                        embed=_job_embed(job, f"Logs: {instance}")
+                    )
                     return
                 result = job.get("result") or {}
                 lines: list[str] = result.get("lines", [])
@@ -875,7 +921,9 @@ class DcsCog(commands.Cog):
                 # Build output: errors first (most useful), then raw tail
                 parts: list[str] = []
                 if scripting:
-                    parts.append(f"=== SCRIPTING / LUA ERRORS ({len(scripting)} lines) ===")
+                    parts.append(
+                        f"=== SCRIPTING / LUA ERRORS ({len(scripting)} lines) ==="
+                    )
                     parts.extend(scripting)
                     parts.append("")
                 if dcs_errs:
@@ -911,7 +959,9 @@ class DcsCog(commands.Cog):
         # /dcs hosts                                                        #
         # ---------------------------------------------------------------- #
 
-        @self.dcs.command(name="hosts", description="List registered orchestrator hosts")
+        @self.dcs.command(
+            name="hosts", description="List registered orchestrator hosts"
+        )
         async def cmd_hosts(interaction: discord.Interaction) -> None:
             if not await _check_channel(interaction):
                 return
@@ -943,7 +993,9 @@ class DcsCog(commands.Cog):
         # ---------------------------------------------------------------- #
 
         @self.dcs.command(name="jobs", description="List recent jobs (last 10)")
-        @app_commands.describe(status="Filter by status: queued, running, succeeded, failed")
+        @app_commands.describe(
+            status="Filter by status: queued, running, succeeded, failed"
+        )
         async def cmd_jobs(
             interaction: discord.Interaction, status: str | None = None
         ) -> None:
@@ -962,7 +1014,9 @@ class DcsCog(commands.Cog):
                 )
                 for job in recent:
                     js = job.get("status", "unknown")
-                    dot = "🟢" if js == "succeeded" else "🔴" if js == "failed" else "🟡"
+                    dot = (
+                        "🟢" if js == "succeeded" else "🔴" if js == "failed" else "🟡"
+                    )
                     embed.add_field(
                         name=f"{dot} `{job.get('id', '—')}`",
                         value=(
@@ -982,12 +1036,16 @@ class DcsCog(commands.Cog):
         # /dcs mission <instance> <mission_file> [source]                   #
         # ---------------------------------------------------------------- #
 
-        @self.dcs.command(name="mission", description="Load a mission file and restart the server")
+        @self.dcs.command(
+            name="mission", description="Load a mission file and restart the server"
+        )
         @app_commands.describe(
             instance="Instance to load the mission on",
             mission_file="Mission file (searches Active Missions on all hosts — type to filter)",
         )
-        @app_commands.autocomplete(instance=_instance_autocomplete, mission_file=_active_mission_autocomplete)
+        @app_commands.autocomplete(
+            instance=_instance_autocomplete, mission_file=_active_mission_autocomplete
+        )
         async def cmd_mission(
             interaction: discord.Interaction,
             instance: str,
@@ -1021,15 +1079,24 @@ class DcsCog(commands.Cog):
                 target_host_id = inst_ref.get("hostId")
 
                 # Cross-host transfer: download from source, upload to target
-                if source_host_id and target_host_id and source_host_id != target_host_id:
+                if (
+                    source_host_id
+                    and target_host_id
+                    and source_host_id != target_host_id
+                ):
                     await interaction.followup.send(
-                        f"Fetching `{filename}` from another host — please wait...", ephemeral=True
+                        f"Fetching `{filename}` from another host — please wait...",
+                        ephemeral=True,
                     )
-                    data = await client.download_active_mission(source_host_id, filename)
+                    data = await client.download_active_mission(
+                        source_host_id, filename
+                    )
                     await client.upload_active_mission(target_host_id, filename, data)
 
                 job_ref = await client.trigger_action(
-                    instance, "mission_load", body={"mission": filename},
+                    instance,
+                    "mission_load",
+                    body={"mission": filename},
                     actor_id=str(interaction.user.id),
                 )
                 job = await _poll_job(job_ref["jobId"])
@@ -1052,7 +1119,10 @@ class DcsCog(commands.Cog):
         # /dcs upload <file>                                                 #
         # ---------------------------------------------------------------- #
 
-        @self.dcs.command(name="upload", description="Upload a .miz file to the Active Missions folder")
+        @self.dcs.command(
+            name="upload",
+            description="Upload a .miz file to the Active Missions folder",
+        )
         @app_commands.describe(
             file="The .miz file to upload",
             rename="Auto-rename if a file with that name already exists (e.g. mission_2.miz)",
@@ -1075,13 +1145,17 @@ class DcsCog(commands.Cog):
             try:
                 hosts = await client.list_hosts()
                 if not hosts:
-                    await interaction.followup.send("No hosts registered.", ephemeral=True)
+                    await interaction.followup.send(
+                        "No hosts registered.", ephemeral=True
+                    )
                     return
                 data = await file.read()
                 upload_name = file.filename
                 renamed = False
                 try:
-                    result = await client.upload_active_mission(hosts[0]["id"], upload_name, data)
+                    result = await client.upload_active_mission(
+                        hosts[0]["id"], upload_name, data
+                    )
                 except OrchestratorError as exc:
                     if exc.status_code == 409 and rename:
                         # Auto-rename: try filename_2.miz, filename_3.miz, ...
@@ -1089,7 +1163,9 @@ class DcsCog(commands.Cog):
                         for n in range(2, 11):
                             upload_name = f"{stem}_{n}.miz"
                             try:
-                                result = await client.upload_active_mission(hosts[0]["id"], upload_name, data)
+                                result = await client.upload_active_mission(
+                                    hosts[0]["id"], upload_name, data
+                                )
                                 renamed = True
                                 break
                             except OrchestratorError as inner:
@@ -1097,7 +1173,8 @@ class DcsCog(commands.Cog):
                                     raise
                         else:
                             await interaction.followup.send(
-                                "Could not find a free filename after 10 attempts.", ephemeral=True
+                                "Could not find a free filename after 10 attempts.",
+                                ephemeral=True,
                             )
                             return
                     elif exc.status_code == 409:
@@ -1111,19 +1188,28 @@ class DcsCog(commands.Cog):
                         raise
                 embed = discord.Embed(title=f"Uploaded: {upload_name}", colour=0x2ECC71)
                 if renamed:
-                    embed.description = f"⚠️ Renamed from `{file.filename}` (original already exists)"
+                    embed.description = (
+                        f"⚠️ Renamed from `{file.filename}` (original already exists)"
+                    )
                 embed.add_field(name="Size", value=f"{len(data):,} bytes", inline=True)
                 if saved_as := result.get("path"):
-                    embed.add_field(name="Saved as", value=f"`{saved_as}`", inline=False)
+                    embed.add_field(
+                        name="Saved as", value=f"`{saved_as}`", inline=False
+                    )
                 await interaction.followup.send(embed=embed)
             except OrchestratorError as exc:
-                await interaction.followup.send(f"Upload failed: {exc.detail}", ephemeral=True)
+                await interaction.followup.send(
+                    f"Upload failed: {exc.detail}", ephemeral=True
+                )
 
         # ---------------------------------------------------------------- #
         # /dcs download <filename>                                          #
         # ---------------------------------------------------------------- #
 
-        @self.dcs.command(name="download", description="Download a .miz file from the Active Missions folder")
+        @self.dcs.command(
+            name="download",
+            description="Download a .miz file from the Active Missions folder",
+        )
         @app_commands.describe(filename="Mission file to download")
         async def cmd_download(
             interaction: discord.Interaction,
@@ -1137,16 +1223,20 @@ class DcsCog(commands.Cog):
             try:
                 hosts = await client.list_hosts()
                 if not hosts:
-                    await interaction.followup.send("No hosts registered.", ephemeral=True)
+                    await interaction.followup.send(
+                        "No hosts registered.", ephemeral=True
+                    )
                     return
                 data = await client.download_active_mission(hosts[0]["id"], filename)
             except OrchestratorError as exc:
-                await interaction.followup.send(f"Download failed: {exc.detail}", ephemeral=True)
+                await interaction.followup.send(
+                    f"Download failed: {exc.detail}", ephemeral=True
+                )
                 return
             _25MB = 25 * 1024 * 1024
             if len(data) > _25MB:
                 await interaction.followup.send(
-                    f"`{filename}` is {len(data) / (1024*1024):.1f} MB — too large for Discord (25 MB limit).",
+                    f"`{filename}` is {len(data) / (1024 * 1024):.1f} MB — too large for Discord (25 MB limit).",
                     ephemeral=True,
                 )
                 return
@@ -1182,7 +1272,9 @@ class DcsCog(commands.Cog):
         # /dcs invite [host_name] [expires_in_hours]                        #
         # ---------------------------------------------------------------- #
 
-        @self.dcs.command(name="invite", description="Generate a community host invite code")
+        @self.dcs.command(
+            name="invite", description="Generate a community host invite code"
+        )
         @app_commands.describe(
             host_name="Optional name to pre-assign to the community host",
             expires_in_hours="Hours until the invite expires (1–168, default: 24)",
@@ -1198,17 +1290,24 @@ class DcsCog(commands.Cog):
                 return
             if expires_in_hours < 1 or expires_in_hours > 168:
                 await interaction.response.send_message(
-                    "expires_in_hours must be between 1 and 168 (max 7 days).", ephemeral=True
+                    "expires_in_hours must be between 1 and 168 (max 7 days).",
+                    ephemeral=True,
                 )
                 return
             await interaction.response.defer(ephemeral=True)
             try:
-                invite = await client.create_invite(host_name=host_name, expires_in_hours=expires_in_hours)
+                invite = await client.create_invite(
+                    host_name=host_name, expires_in_hours=expires_in_hours
+                )
                 code = invite.get("code", "—")
                 base_url = config.installer_base_url
-                sha256_arg = f" -AgentZipSha256 {config.agent_zip_sha256}" if config.agent_zip_sha256 else ""
+                sha256_arg = (
+                    f" -AgentZipSha256 {config.agent_zip_sha256}"
+                    if config.agent_zip_sha256
+                    else ""
+                )
                 install_cmd = (
-                    f"$f=\"$env:TEMP\\install-agent.ps1\"; "
+                    f'$f="$env:TEMP\\install-agent.ps1"; '
                     f"iwr -UseBasicParsing {base_url}/install/install.ps1 -OutFile $f; "
                     f"powershell -ExecutionPolicy Bypass -File $f"
                     f" -InviteCode {code}"
@@ -1220,10 +1319,20 @@ class DcsCog(commands.Cog):
                     colour=0x9B59B6,
                 )
                 if host_name:
-                    embed.add_field(name="Pre-assigned name", value=host_name, inline=True)
-                embed.add_field(name="Expires in", value=f"{expires_in_hours}h", inline=True)
-                embed.add_field(name="Run this in PowerShell (as Administrator)", value=f"```powershell\n{install_cmd}\n```", inline=False)
-                embed.set_footer(text="Single-use. The invite code is embedded in the command above.")
+                    embed.add_field(
+                        name="Pre-assigned name", value=host_name, inline=True
+                    )
+                embed.add_field(
+                    name="Expires in", value=f"{expires_in_hours}h", inline=True
+                )
+                embed.add_field(
+                    name="Run this in PowerShell (as Administrator)",
+                    value=f"```powershell\n{install_cmd}\n```",
+                    inline=False,
+                )
+                embed.set_footer(
+                    text="Single-use. The invite code is embedded in the command above."
+                )
                 await interaction.followup.send(embed=embed, ephemeral=True)
             except OrchestratorError as exc:
                 await interaction.followup.send(f"Error: {exc.detail}", ephemeral=True)
@@ -1232,7 +1341,9 @@ class DcsCog(commands.Cog):
         # /dcs clear                                                        #
         # ---------------------------------------------------------------- #
 
-        @self.dcs.command(name="clear", description="Delete bot messages from this channel")
+        @self.dcs.command(
+            name="clear", description="Delete bot messages from this channel"
+        )
         async def cmd_clear(interaction: discord.Interaction) -> None:
             if not await _check_channel(interaction):
                 return
@@ -1241,7 +1352,9 @@ class DcsCog(commands.Cog):
             await interaction.response.defer(ephemeral=True)
             channel = interaction.channel
             if not isinstance(channel, discord.TextChannel):
-                await interaction.followup.send("Can only clear text channels.", ephemeral=True)
+                await interaction.followup.send(
+                    "Can only clear text channels.", ephemeral=True
+                )
                 return
             bot_id = self._bot.user.id
             try:
@@ -1286,7 +1399,10 @@ class DcsCog(commands.Cog):
                 if low in m.get("relative_path", "").lower()
             ][:25]
 
-        @self.dcs.command(name="delete", description="Delete a mission from the Active Missions folder (backed up first)")
+        @self.dcs.command(
+            name="delete",
+            description="Delete a mission from the Active Missions folder (backed up first)",
+        )
         @app_commands.describe(mission_file="Mission filename to delete")
         @app_commands.autocomplete(mission_file=_active_mission_delete_autocomplete)
         async def cmd_delete(
@@ -1305,16 +1421,22 @@ class DcsCog(commands.Cog):
             )
             await view.wait()
             if not view.confirmed:
-                await interaction.edit_original_response(content="Cancelled.", view=None)
+                await interaction.edit_original_response(
+                    content="Cancelled.", view=None
+                )
                 return
 
             await interaction.edit_original_response(content="Deleting…", view=None)
             try:
                 hosts = await client.list_hosts()
                 if not hosts:
-                    await interaction.edit_original_response(content="No hosts registered.", view=None)
+                    await interaction.edit_original_response(
+                        content="No hosts registered.", view=None
+                    )
                     return
-                result = await client.delete_active_mission(hosts[0]["id"], mission_file)
+                result = await client.delete_active_mission(
+                    hosts[0]["id"], mission_file
+                )
                 embed = discord.Embed(
                     title="Mission Deleted",
                     description=f"`{mission_file}` moved to `{result.get('backed_up_to', 'Backup_Missions/')}`.",
@@ -1330,7 +1452,9 @@ class DcsCog(commands.Cog):
         # /dcs restartall                                                    #
         # ---------------------------------------------------------------- #
 
-        @self.dcs.command(name="restartall", description="Restart every running DCS instance")
+        @self.dcs.command(
+            name="restartall", description="Restart every running DCS instance"
+        )
         async def cmd_restartall(interaction: discord.Interaction) -> None:
             if not await _check_channel(interaction):
                 return
@@ -1349,21 +1473,33 @@ class DcsCog(commands.Cog):
                 await interaction.followup.send("No instances registered.")
                 return
 
-            running = [i for i in instances if (i.get("runtime") or {}).get("status") == "running"]
+            running = [
+                i
+                for i in instances
+                if (i.get("runtime") or {}).get("status") == "running"
+            ]
             if not running:
                 await interaction.followup.send("No instances are currently running.")
                 return
 
             names = ", ".join(i["name"] for i in running)
-            await interaction.followup.send(f"Restarting {len(running)} instance(s): {names}…")
+            await interaction.followup.send(
+                f"Restarting {len(running)} instance(s): {names}…"
+            )
 
             async def _do_restart(inst: dict) -> tuple[str, bool, str]:
                 name = inst["name"]
                 try:
-                    job_ref = await client.trigger_action(inst["id"], "restart", actor_id=str(interaction.user.id))
+                    job_ref = await client.trigger_action(
+                        inst["id"], "restart", actor_id=str(interaction.user.id)
+                    )
                     job = await _poll_job(job_ref["jobId"])
                     ok = job.get("status") == "succeeded"
-                    msg = "✅" if ok else f"❌ {(job.get('error') or {}).get('message', 'failed')}"
+                    msg = (
+                        "✅"
+                        if ok
+                        else f"❌ {(job.get('error') or {}).get('message', 'failed')}"
+                    )
                     return name, ok, msg
                 except Exception as exc:
                     return name, False, f"❌ {exc}"
@@ -1384,7 +1520,10 @@ class DcsCog(commands.Cog):
         # /dcs password <instance> <new_password>                           #
         # ---------------------------------------------------------------- #
 
-        @self.dcs.command(name="password", description="Change the multiplayer password for a DCS instance")
+        @self.dcs.command(
+            name="password",
+            description="Change the multiplayer password for a DCS instance",
+        )
         @app_commands.describe(
             instance="Instance to change the password on",
             new_password="New password (leave blank to clear)",
@@ -1403,7 +1542,9 @@ class DcsCog(commands.Cog):
             await interaction.response.defer(ephemeral=True)
             try:
                 job_ref = await client.trigger_action(
-                    instance, "set_password", body={"password": new_password},
+                    instance,
+                    "set_password",
+                    body={"password": new_password},
                     actor_id=str(interaction.user.id),
                 )
                 job = await _poll_job(job_ref["jobId"])
@@ -1430,7 +1571,10 @@ class DcsCog(commands.Cog):
         # /dcs resetpersist <instance>                                       #
         # ---------------------------------------------------------------- #
 
-        @self.dcs.command(name="resetpersist", description="Back up and clear persistence save files for an instance")
+        @self.dcs.command(
+            name="resetpersist",
+            description="Back up and clear persistence save files for an instance",
+        )
         @app_commands.describe(instance="Instance to reset persistence for")
         @app_commands.autocomplete(instance=_instance_autocomplete)
         async def cmd_resetpersist(
@@ -1449,12 +1593,18 @@ class DcsCog(commands.Cog):
             )
             await view.wait()
             if not view.confirmed:
-                await interaction.edit_original_response(content="Cancelled.", view=None)
+                await interaction.edit_original_response(
+                    content="Cancelled.", view=None
+                )
                 return
-            await interaction.edit_original_response(content="Resetting persistence…", view=None)
+            await interaction.edit_original_response(
+                content="Resetting persistence…", view=None
+            )
 
             try:
-                job_ref = await client.trigger_action(instance, "reset_persist", actor_id=str(interaction.user.id))
+                job_ref = await client.trigger_action(
+                    instance, "reset_persist", actor_id=str(interaction.user.id)
+                )
                 job = await _poll_job(job_ref["jobId"])
                 if job.get("status") not in _TERMINAL_STATES:
                     await interaction.followup.send(
@@ -1464,9 +1614,15 @@ class DcsCog(commands.Cog):
                 embed = _job_embed(job, f"Reset Persistence: {instance}")
                 if job.get("status") == "succeeded":
                     result = job.get("result") or {}
-                    embed.add_field(name="Files backed up", value=str(result.get("backed_up", 0)), inline=True)
+                    embed.add_field(
+                        name="Files backed up",
+                        value=str(result.get("backed_up", 0)),
+                        inline=True,
+                    )
                     if bd := result.get("backup_dir"):
-                        embed.add_field(name="Backup folder", value=f"`{bd}`", inline=True)
+                        embed.add_field(
+                            name="Backup folder", value=f"`{bd}`", inline=True
+                        )
                 await interaction.followup.send(embed=embed)
             except OrchestratorError as exc:
                 await interaction.followup.send(
@@ -1483,11 +1639,13 @@ class DcsCog(commands.Cog):
             period="Time period: 7d, 30d, or all time",
         )
         @app_commands.autocomplete(instance=_instance_autocomplete)
-        @app_commands.choices(period=[
-            app_commands.Choice(name="Last 7 days",  value="7d"),
-            app_commands.Choice(name="Last 30 days", value="30d"),
-            app_commands.Choice(name="All time",     value="all"),
-        ])
+        @app_commands.choices(
+            period=[
+                app_commands.Choice(name="Last 7 days", value="7d"),
+                app_commands.Choice(name="Last 30 days", value="30d"),
+                app_commands.Choice(name="All time", value="all"),
+            ]
+        )
         async def cmd_stats(
             interaction: discord.Interaction,
             instance: str | None = None,
@@ -1520,39 +1678,65 @@ class DcsCog(commands.Cog):
                 )
                 return
 
-            joins    = [e for e in events if e["event_type"] == "player_join"]
+            joins = [e for e in events if e["event_type"] == "player_join"]
             missions = [e for e in events if e["event_type"] == "mission_start"]
 
-            player_counts  = Counter(e["player_name"] for e in joins if e.get("player_name"))
-            mission_counts = Counter(e["mission_name"] for e in joins if e.get("mission_name"))
-            map_counts     = Counter(e["map"]          for e in joins if e.get("map"))
+            player_counts = Counter(
+                e["player_name"] for e in joins if e.get("player_name")
+            )
+            mission_counts = Counter(
+                e["mission_name"] for e in joins if e.get("mission_name")
+            )
+            map_counts = Counter(e["map"] for e in joins if e.get("map"))
 
-            title = "DCS Stats — {} ({})".format(instance or "All Servers", period_label)
+            title = "DCS Stats — {} ({})".format(
+                instance or "All Servers", period_label
+            )
             embed = discord.Embed(title=title, colour=0x3498DB)
 
-            embed.add_field(name="Sessions",       value=str(len(joins)),           inline=True)
-            embed.add_field(name="Unique Players",  value=str(len(player_counts)),  inline=True)
-            embed.add_field(name="Missions Played", value=str(len(mission_counts)),  inline=True)
+            embed.add_field(name="Sessions", value=str(len(joins)), inline=True)
+            embed.add_field(
+                name="Unique Players", value=str(len(player_counts)), inline=True
+            )
+            embed.add_field(
+                name="Missions Played", value=str(len(mission_counts)), inline=True
+            )
 
             if player_counts:
                 top_lines = []
                 for i, (name, n) in enumerate(player_counts.most_common(5)):
                     suffix = "s" if n != 1 else ""
-                    top_lines.append("{i}. {name} ({n} session{s})".format(i=i+1, name=name, n=n, s=suffix))
-                embed.add_field(name="Top Players", value=chr(10).join(top_lines), inline=True)
+                    top_lines.append(
+                        "{i}. {name} ({n} session{s})".format(
+                            i=i + 1, name=name, n=n, s=suffix
+                        )
+                    )
+                embed.add_field(
+                    name="Top Players", value=chr(10).join(top_lines), inline=True
+                )
 
             if mission_counts:
                 top_m = []
                 for i, (name, n) in enumerate(mission_counts.most_common(5)):
-                    top_m.append("{i}. {name} ({n}x)".format(i=i+1, name=name[:40], n=n))
-                embed.add_field(name="Top Missions", value=chr(10).join(top_m), inline=True)
+                    top_m.append(
+                        "{i}. {name} ({n}x)".format(i=i + 1, name=name[:40], n=n)
+                    )
+                embed.add_field(
+                    name="Top Missions", value=chr(10).join(top_m), inline=True
+                )
 
             if map_counts:
                 top_map = []
                 for i, (name, n) in enumerate(map_counts.most_common(5)):
                     suffix = "s" if n != 1 else ""
-                    top_map.append("{i}. {name} ({n} session{s})".format(i=i+1, name=name, n=n, s=suffix))
-                embed.add_field(name="Top Maps", value=chr(10).join(top_map), inline=True)
+                    top_map.append(
+                        "{i}. {name} ({n} session{s})".format(
+                            i=i + 1, name=name, n=n, s=suffix
+                        )
+                    )
+                embed.add_field(
+                    name="Top Maps", value=chr(10).join(top_map), inline=True
+                )
 
             # Peak hours bar chart
             if joins:
@@ -1565,6 +1749,7 @@ class DcsCog(commands.Cog):
                     except Exception:
                         pass
                 if hour_counts:
+
                     def _fmt12(h: int) -> str:
                         suffix = "am" if h < 12 else "pm"
                         return f"{h % 12 or 12}{suffix}"
@@ -1579,7 +1764,9 @@ class DcsCog(commands.Cog):
                         est = _fmt12((h - 5) % 24)
                         pst = _fmt12((h - 8) % 24)
                         peak_lines.append(f"{est} EST / {pst} PST  {bar} {n}")
-                    embed.add_field(name="Peak Hours", value=chr(10).join(peak_lines), inline=False)
+                    embed.add_field(
+                        name="Peak Hours", value=chr(10).join(peak_lines), inline=False
+                    )
 
             # Session duration
             sessions = _pair_sessions(events)
@@ -1601,7 +1788,9 @@ class DcsCog(commands.Cog):
         # /dcs reboot                                                        #
         # ---------------------------------------------------------------- #
 
-        @self.dcs.command(name="reboot", description="Reboot the Windows DCS host machine")
+        @self.dcs.command(
+            name="reboot", description="Reboot the Windows DCS host machine"
+        )
         @app_commands.describe(host="Host machine to reboot")
         @app_commands.autocomplete(host=_host_autocomplete)
         async def cmd_reboot(interaction: discord.Interaction, host: str) -> None:
@@ -1619,10 +1808,14 @@ class DcsCog(commands.Cog):
             )
             await view.wait()
             if not view.confirmed:
-                await interaction.edit_original_response(content="Reboot cancelled.", view=None)
+                await interaction.edit_original_response(
+                    content="Reboot cancelled.", view=None
+                )
                 return
 
-            await interaction.edit_original_response(content="Sending reboot command…", view=None)
+            await interaction.edit_original_response(
+                content="Sending reboot command…", view=None
+            )
             try:
                 hosts = await client.list_hosts()
                 matched = next((h for h in hosts if h["name"] == host), None)
@@ -1646,14 +1839,18 @@ class DcsCog(commands.Cog):
                     "They will restart automatically."
                 )
             await interaction.edit_original_response(
-                content="✅ Reboot command sent. Host will restart in ~30 seconds.", view=None
+                content="✅ Reboot command sent. Host will restart in ~30 seconds.",
+                view=None,
             )
 
         # ---------------------------------------------------------------- #
         # /dcs update                                                        #
         # ---------------------------------------------------------------- #
 
-        @self.dcs.command(name="update", description="Update DCS World on a host and restart its servers")
+        @self.dcs.command(
+            name="update",
+            description="Update DCS World on a host and restart its servers",
+        )
         @app_commands.describe(host="Host machine to update")
         @app_commands.autocomplete(host=_host_autocomplete)
         async def cmd_update(interaction: discord.Interaction, host: str) -> None:
@@ -1672,10 +1869,14 @@ class DcsCog(commands.Cog):
             )
             await view.wait()
             if not view.confirmed:
-                await interaction.edit_original_response(content="Update cancelled.", view=None)
+                await interaction.edit_original_response(
+                    content="Update cancelled.", view=None
+                )
                 return
 
-            await interaction.edit_original_response(content="Triggering DCS update…", view=None)
+            await interaction.edit_original_response(
+                content="Triggering DCS update…", view=None
+            )
             try:
                 hosts = await client.list_hosts()
                 matched = next((h for h in hosts if h["name"] == host), None)
@@ -1699,21 +1900,22 @@ class DcsCog(commands.Cog):
                     embed=_update_phase_embed(host, "starting", "Starting update...")
                 )
             await interaction.edit_original_response(
-                content="Update triggered. Watch the status channel for progress.", view=None
+                content="Update triggered. Watch the status channel for progress.",
+                view=None,
             )
 
             # Background task: poll status and edit the embed until done
             async def _poll_update() -> None:
                 _PHASE_LABELS = {
-                    "starting":   "Starting...",
-                    "stopping":   "Stopping servers...",
-                    "updating":   "Downloading update...",
+                    "starting": "Starting...",
+                    "stopping": "Stopping servers...",
+                    "updating": "Downloading update...",
                     "restarting": "Restarting servers...",
-                    "complete":   "Complete",
-                    "failed":     "Failed",
+                    "complete": "Complete",
+                    "failed": "Failed",
                 }
-                _POLL_INTERVAL = 10   # seconds between polls
-                _MAX_POLLS     = 360  # 60 minutes max
+                _POLL_INTERVAL = 10  # seconds between polls
+                _MAX_POLLS = 360  # 60 minutes max
                 for _ in range(_MAX_POLLS):
                     await asyncio.sleep(_POLL_INTERVAL)
                     try:
@@ -1723,7 +1925,9 @@ class DcsCog(commands.Cog):
                     if status_msg:
                         try:
                             await status_msg.edit(
-                                embed=_update_phase_embed(host, st.get("phase", ""), st.get("message", ""))
+                                embed=_update_phase_embed(
+                                    host, st.get("phase", ""), st.get("message", "")
+                                )
                             )
                         except Exception:
                             pass
@@ -1769,7 +1973,9 @@ class DcsCog(commands.Cog):
                 for filename in items:
                     if low and low not in filename.lower():
                         continue
-                    stem = filename[:-4] if filename.lower().endswith(".miz") else filename
+                    stem = (
+                        filename[:-4] if filename.lower().endswith(".miz") else filename
+                    )
                     count = play_counts.get(stem, 0)
                     label = f"{inst['name']} \u203a {filename}"
                     if count:
@@ -1784,17 +1990,26 @@ class DcsCog(commands.Cog):
             ]
 
             if len(candidates) > 24:
-                choices.append(app_commands.Choice(
-                    name=f"... {len(candidates) - 24} more — type a name to search",
-                    value="__hint__",
-                ))
+                choices.append(
+                    app_commands.Choice(
+                        name=f"... {len(candidates) - 24} more — type a name to search",
+                        value="__hint__",
+                    )
+                )
 
             return choices
 
-        @self.dcs.command(name="copy-mission", description="Copy a mission from any server's Missions folder into the shared Active Missions library")
-        @app_commands.describe(source="Server and mission file to copy (type to search)")
+        @self.dcs.command(
+            name="copy-mission",
+            description="Copy a mission from any server's Missions folder into the shared Active Missions library",
+        )
+        @app_commands.describe(
+            source="Server and mission file to copy (type to search)"
+        )
         @app_commands.autocomplete(source=_all_instance_missions_autocomplete)
-        async def cmd_copy_mission(interaction: discord.Interaction, source: str) -> None:
+        async def cmd_copy_mission(
+            interaction: discord.Interaction, source: str
+        ) -> None:
             if not await _check_channel(interaction):
                 return
             if not await _require_operator(interaction):
@@ -1823,14 +2038,21 @@ class DcsCog(commands.Cog):
                 description=f"`{filename}` is now available in the Active Missions folder.",
                 colour=0x2ECC71,
             )
-            embed.add_field(name="Size", value=f"{result.get('size_bytes', 0) // 1024} KB", inline=True)
+            embed.add_field(
+                name="Size",
+                value=f"{result.get('size_bytes', 0) // 1024} KB",
+                inline=True,
+            )
             await interaction.followup.send(embed=embed)
 
         # ---------------------------------------------------------------- #
         # /dcs remove-host                                                   #
         # ---------------------------------------------------------------- #
 
-        @self.dcs.command(name="remove-host", description="Remove a community host and all its instances from the platform")
+        @self.dcs.command(
+            name="remove-host",
+            description="Remove a community host and all its instances from the platform",
+        )
         @app_commands.describe(host="Host to remove")
         @app_commands.autocomplete(host=_host_autocomplete)
         async def cmd_remove_host(interaction: discord.Interaction, host: str) -> None:
@@ -1848,10 +2070,14 @@ class DcsCog(commands.Cog):
             )
             await view.wait()
             if not view.confirmed:
-                await interaction.edit_original_response(content="Cancelled.", view=None)
+                await interaction.edit_original_response(
+                    content="Cancelled.", view=None
+                )
                 return
 
-            await interaction.edit_original_response(content="Removing host…", view=None)
+            await interaction.edit_original_response(
+                content="Removing host…", view=None
+            )
             try:
                 hosts = await client.list_hosts()
                 matched = next((h for h in hosts if h["name"] == host), None)
@@ -1875,7 +2101,10 @@ class DcsCog(commands.Cog):
         # /dcs register                                                      #
         # ---------------------------------------------------------------- #
 
-        @self.dcs.command(name="register", description="Link your Discord account to your DCS pilot name")
+        @self.dcs.command(
+            name="register",
+            description="Link your Discord account to your DCS pilot name",
+        )
         @app_commands.describe(dcs_name="Your exact DCS pilot name (case-sensitive)")
         async def cmd_register(interaction: discord.Interaction, dcs_name: str) -> None:
             regs = _load_registrations()
@@ -1894,11 +2123,13 @@ class DcsCog(commands.Cog):
 
         @self.dcs.command(name="mystats", description="Show your personal DCS stats")
         @app_commands.describe(period="Time period: 7d, 30d, or all time")
-        @app_commands.choices(period=[
-            app_commands.Choice(name="Last 7 days",  value="7d"),
-            app_commands.Choice(name="Last 30 days", value="30d"),
-            app_commands.Choice(name="All time",     value="all"),
-        ])
+        @app_commands.choices(
+            period=[
+                app_commands.Choice(name="Last 7 days", value="7d"),
+                app_commands.Choice(name="Last 30 days", value="30d"),
+                app_commands.Choice(name="All time", value="all"),
+            ]
+        )
         async def cmd_mystats(
             interaction: discord.Interaction,
             period: str = "7d",
@@ -1917,6 +2148,7 @@ class DcsCog(commands.Cog):
             from collections import Counter
 
             from datetime import timedelta
+
             if period == "7d":
                 since = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
                 period_label = "last 7 days"
@@ -1930,17 +2162,21 @@ class DcsCog(commands.Cog):
             try:
                 events = await client.get_analytics_events(since=since, limit=2000)
             except OrchestratorError as exc:
-                await interaction.followup.send(f"Orchestrator error: {exc.detail}", ephemeral=True)
+                await interaction.followup.send(
+                    f"Orchestrator error: {exc.detail}", ephemeral=True
+                )
                 return
 
             my_joins = [
-                e for e in events
+                e
+                for e in events
                 if e["event_type"] == "player_join" and e.get("player_name") == dcs_name
             ]
 
             # Pair join/leave for this player to compute session durations
             my_events = [
-                e for e in events
+                e
+                for e in events
                 if e.get("player_name") == dcs_name
                 and e["event_type"] in ("player_join", "player_leave")
             ]
@@ -1955,8 +2191,12 @@ class DcsCog(commands.Cog):
 
             embed.add_field(name="Sessions", value=str(len(my_joins)), inline=True)
 
-            mission_counts = Counter(e["mission_name"] for e in my_joins if e.get("mission_name"))
-            embed.add_field(name="Missions Played", value=str(len(mission_counts)), inline=True)
+            mission_counts = Counter(
+                e["mission_name"] for e in my_joins if e.get("mission_name")
+            )
+            embed.add_field(
+                name="Missions Played", value=str(len(mission_counts)), inline=True
+            )
 
             map_counts = Counter(e["map"] for e in my_joins if e.get("map"))
             embed.add_field(name="Maps Played", value=str(len(map_counts)), inline=True)
@@ -1964,8 +2204,12 @@ class DcsCog(commands.Cog):
             if my_durations:
                 avg_dur = sum(my_durations) / len(my_durations)
                 total_dur = sum(my_durations)
-                embed.add_field(name="Avg Session", value=_fmt_duration(avg_dur), inline=True)
-                embed.add_field(name="Total Time", value=_fmt_duration(total_dur), inline=True)
+                embed.add_field(
+                    name="Avg Session", value=_fmt_duration(avg_dur), inline=True
+                )
+                embed.add_field(
+                    name="Total Time", value=_fmt_duration(total_dur), inline=True
+                )
 
             if mission_counts:
                 fav_mission, fav_count = mission_counts.most_common(1)[0]
@@ -1985,6 +2229,7 @@ class DcsCog(commands.Cog):
 
             # Personal peak hours
             if my_joins:
+
                 def _fmt12(h: int) -> str:
                     suffix = "am" if h < 12 else "pm"
                     return f"{h % 12 or 12}{suffix}"
@@ -2008,9 +2253,15 @@ class DcsCog(commands.Cog):
                         est = _fmt12((h - 5) % 24)
                         pst = _fmt12((h - 8) % 24)
                         peak_lines.append(f"{est} EST / {pst} PST  {bar} {n}")
-                    embed.add_field(name="Your Peak Hours", value=chr(10).join(peak_lines), inline=False)
+                    embed.add_field(
+                        name="Your Peak Hours",
+                        value=chr(10).join(peak_lines),
+                        inline=False,
+                    )
 
             if not my_joins:
-                embed.description = f"No sessions found for `{dcs_name}` in this period."
+                embed.description = (
+                    f"No sessions found for `{dcs_name}` in this period."
+                )
 
             await interaction.followup.send(embed=embed, ephemeral=True)

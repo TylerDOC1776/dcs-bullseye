@@ -8,16 +8,16 @@ Jobs are not persisted — orchestrator restart clears all jobs.
 from __future__ import annotations
 
 import secrets
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
 
 @dataclass
 class Job:
-    id: str                           # "job_<12-hex>"
-    type: str                         # action name e.g. "start"
-    status: str                       # queued | running | succeeded | failed
+    id: str  # "job_<12-hex>"
+    type: str  # action name e.g. "start"
+    status: str  # queued | running | succeeded | failed
     instance_id: str | None
     created_at: datetime
     started_at: datetime | None = None
@@ -25,8 +25,8 @@ class Job:
     result: dict[str, Any] | None = None
     error: dict[str, Any] | None = None
     host_id: str | None = None
-    agent_job_id: str | None = None   # job id returned by the remote agent
-    actor: str | None = None          # Discord user ID/name that triggered the action
+    agent_job_id: str | None = None  # job id returned by the remote agent
+    actor: str | None = None  # Discord user ID/name that triggered the action
 
 
 class JobStore:

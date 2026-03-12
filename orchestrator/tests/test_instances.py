@@ -54,20 +54,14 @@ def test_instances_require_auth(client: TestClient) -> None:
     assert client.get("/api/v1/instances").status_code == 403
 
 
-def test_list_missions_proxies_to_agent(
-    client: TestClient, instance_id: str
-) -> None:
-    with patch(
-        "orchestrator.api.routes.instances.AgentClient"
-    ) as MockClient:
+def test_list_missions_proxies_to_agent(client: TestClient, instance_id: str) -> None:
+    with patch("orchestrator.api.routes.instances.AgentClient") as MockClient:
         mock_instance = AsyncMock()
         mock_instance.list_missions.return_value = ["goonfront.miz", "red_flag.miz"]
         MockClient.return_value.__aenter__ = AsyncMock(return_value=mock_instance)
         MockClient.return_value.__aexit__ = AsyncMock(return_value=False)
 
-        resp = client.get(
-            f"/api/v1/instances/{instance_id}/missions", headers=HEADERS
-        )
+        resp = client.get(f"/api/v1/instances/{instance_id}/missions", headers=HEADERS)
     assert resp.status_code == 200
     assert resp.json() == {"items": ["goonfront.miz", "red_flag.miz"]}
 
@@ -75,14 +69,10 @@ def test_list_missions_proxies_to_agent(
 def test_list_missions_agent_down_returns_empty(
     client: TestClient, instance_id: str
 ) -> None:
-    with patch(
-        "orchestrator.api.routes.instances.AgentClient"
-    ) as MockClient:
+    with patch("orchestrator.api.routes.instances.AgentClient") as MockClient:
         MockClient.return_value.__aenter__ = AsyncMock(side_effect=Exception("refused"))
         MockClient.return_value.__aexit__ = AsyncMock(return_value=False)
 
-        resp = client.get(
-            f"/api/v1/instances/{instance_id}/missions", headers=HEADERS
-        )
+        resp = client.get(f"/api/v1/instances/{instance_id}/missions", headers=HEADERS)
     assert resp.status_code == 200
     assert resp.json() == {"items": []}

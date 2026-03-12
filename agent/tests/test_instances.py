@@ -1,6 +1,3 @@
-from pathlib import Path
-
-import pytest
 from fastapi.testclient import TestClient
 
 from .conftest import HEADERS
@@ -43,6 +40,7 @@ def test_get_instance_status_not_found(client: TestClient) -> None:
 
 def test_get_instance_status_stopped(client: TestClient, mock_ctrl) -> None:
     from .conftest import _RUNTIME_INFO
+
     mock_ctrl.runtime_info.return_value = {**_RUNTIME_INFO, "status": "SERVICE_STOPPED"}
     resp = client.get("/agent/v1/instances/DCS-test/status", headers=HEADERS)
     assert resp.status_code == 200

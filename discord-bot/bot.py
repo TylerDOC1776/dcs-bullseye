@@ -48,7 +48,9 @@ async def main() -> None:
         except Exception:
             pass
 
-    async with OrchestratorClient(config.orchestrator_url, config.orchestrator_api_key) as client:
+    async with OrchestratorClient(
+        config.orchestrator_url, config.orchestrator_api_key
+    ) as client:
         from cogs.dcs import DcsCog
         from cogs.events import EventsCog
 

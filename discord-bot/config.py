@@ -22,12 +22,18 @@ class BotConfig:
     bot_channel_id: int | None = None
     operator_role: str = "DCS Operator"
     admin_role: str = "DCS Admin"
-    events_channel_id: int | None = None  # SSE notifications; falls back to bot_channel_id
+    events_channel_id: int | None = (
+        None  # SSE notifications; falls back to bot_channel_id
+    )
     status_channel_id: int | None = None  # pinned live-status embed
     external_servers: list[dict] = field(default_factory=list)  # [{name, ip, port}]
-    installer_base_url: str = ""  # public URL used in /dcs invite one-liner; defaults to orchestrator_url
-    agent_zip_sha256: str = ""   # SHA-256 of agent.zip served at /install/agent.zip; included in invite command
-    auto_restart_exclude: list[str] = field(default_factory=list)  # instance names exempt from keepalive auto-start
+    installer_base_url: str = (
+        ""  # public URL used in /dcs invite one-liner; defaults to orchestrator_url
+    )
+    agent_zip_sha256: str = ""  # SHA-256 of agent.zip served at /install/agent.zip; included in invite command
+    auto_restart_exclude: list[str] = field(
+        default_factory=list
+    )  # instance names exempt from keepalive auto-start
 
 
 def load_config() -> BotConfig:
@@ -35,11 +41,15 @@ def load_config() -> BotConfig:
     guild_raw = os.getenv("GUILD_ID")
     orch_url = os.getenv("ORCHESTRATOR_URL")
 
-    missing = [name for name, val in [
-        ("DISCORD_TOKEN", token),
-        ("GUILD_ID", guild_raw),
-        ("ORCHESTRATOR_URL", orch_url),
-    ] if not val]
+    missing = [
+        name
+        for name, val in [
+            ("DISCORD_TOKEN", token),
+            ("GUILD_ID", guild_raw),
+            ("ORCHESTRATOR_URL", orch_url),
+        ]
+        if not val
+    ]
     if missing:
         raise ConfigError(f"Missing required env vars: {', '.join(missing)}")
 
@@ -60,5 +70,9 @@ def load_config() -> BotConfig:
         external_servers=json.loads(os.getenv("EXTERNAL_SERVERS", "[]")),
         installer_base_url=os.getenv("INSTALLER_BASE_URL", orch_url).rstrip("/"),  # type: ignore[arg-type]
         agent_zip_sha256=os.getenv("AGENT_ZIP_SHA256", ""),
-        auto_restart_exclude=[n.strip() for n in os.getenv("AUTO_RESTART_EXCLUDE", "").split(",") if n.strip()],
+        auto_restart_exclude=[
+            n.strip()
+            for n in os.getenv("AUTO_RESTART_EXCLUDE", "").split(",")
+            if n.strip()
+        ],
     )

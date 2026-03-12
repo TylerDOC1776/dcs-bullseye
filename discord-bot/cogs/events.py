@@ -33,13 +33,13 @@ _SUBSCRIBE_TYPES = "instance.status_changed,job.failed"
 _MIN_BACKOFF = 1.0
 _MAX_BACKOFF = 60.0
 
-_CRASH_LOOP_WINDOW     = 600.0  # seconds — sliding window for crash detection
-_CRASH_LOOP_THRESHOLD  = 3      # crashes within the window triggers an alert
+_CRASH_LOOP_WINDOW = 600.0  # seconds — sliding window for crash detection
+_CRASH_LOOP_THRESHOLD = 3  # crashes within the window triggers an alert
 
 _STATUS_COLOURS: dict[str, int] = {
-    "running":  0x2ECC71,
-    "stopped":  0xE74C3C,
-    "error":    0xE74C3C,
+    "running": 0x2ECC71,
+    "stopped": 0xE74C3C,
+    "error": 0xE74C3C,
     "starting": 0xE67E22,
     "stopping": 0xE67E22,
 }
@@ -154,7 +154,7 @@ class EventsCog(commands.Cog):
         self, channel: discord.TextChannel, data: dict
     ) -> None:
         instance_name = data.get("name") or data.get("instanceId", "Unknown")
-        instance_id   = data.get("instanceId", instance_name)
+        instance_id = data.get("instanceId", instance_name)
         status = data.get("status", "unknown")
         prev = data.get("previousStatus", "?")
 
@@ -168,7 +168,11 @@ class EventsCog(commands.Cog):
             return
 
         # Crash loop detection
-        if status in ("stopped", "error") and prev in ("running", "starting", "stopping"):
+        if status in ("stopped", "error") and prev in (
+            "running",
+            "starting",
+            "stopping",
+        ):
             now = time.monotonic()
             times = self._crash_times.get(instance_id, [])
             times.append(now)
@@ -176,7 +180,10 @@ class EventsCog(commands.Cog):
             times = [t for t in times if now - t <= _CRASH_LOOP_WINDOW]
             self._crash_times[instance_id] = times
 
-            if len(times) >= _CRASH_LOOP_THRESHOLD and instance_id not in self._crash_loop_alerted:
+            if (
+                len(times) >= _CRASH_LOOP_THRESHOLD
+                and instance_id not in self._crash_loop_alerted
+            ):
                 self._crash_loop_alerted.add(instance_id)
                 await self._on_crash_loop(channel, instance_name, len(times))
 
@@ -220,9 +227,7 @@ class EventsCog(commands.Cog):
         )
         await channel.send(embed=embed)
 
-    async def _on_job_failed(
-        self, channel: discord.TextChannel, data: dict
-    ) -> None:
+    async def _on_job_failed(self, channel: discord.TextChannel, data: dict) -> None:
         instance_id = data.get("instanceId", "?")
         action = data.get("action", "?")
         error_msg = ""

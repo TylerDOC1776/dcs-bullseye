@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 # Hosts
 # ---------------------------------------------------------------------------
 
+
 class HostCreate(BaseModel):
     name: str
     agentUrl: str
@@ -47,6 +48,7 @@ class Host(BaseModel):
 # Instances
 # ---------------------------------------------------------------------------
 
+
 class InstanceCreate(BaseModel):
     hostId: str
     serviceName: str
@@ -68,7 +70,7 @@ class InstanceStatus(str):
 
 
 class InstanceRuntime(BaseModel):
-    status: str   # running | stopped | starting | stopping | error | unknown
+    status: str  # running | stopped | starting | stopping | error | unknown
     observedAt: datetime
     pid: int | None = None
     startedAt: datetime | None = None
@@ -97,6 +99,7 @@ class InstanceSummary(BaseModel):
 # Jobs
 # ---------------------------------------------------------------------------
 
+
 class JobAccepted(BaseModel):
     jobId: str
     status: str
@@ -119,6 +122,7 @@ class JobResponse(BaseModel):
 # ---------------------------------------------------------------------------
 # Registration / Invite codes
 # ---------------------------------------------------------------------------
+
 
 class InviteCreate(BaseModel):
     hostName: str = ""
@@ -163,8 +167,9 @@ class RegisterResponse(BaseModel):
 # Health / Problem
 # ---------------------------------------------------------------------------
 
+
 class Health(BaseModel):
-    status: str   # ok | degraded | down
+    status: str  # ok | degraded | down
     checkedAt: datetime
     notes: str | None = None
 

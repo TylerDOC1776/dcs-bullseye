@@ -29,16 +29,17 @@ logger = logging.getLogger(__name__)
 
 _api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
-_TIMESTAMP_SKEW = 60        # seconds allowed either side of now
-_NONCE_TTL = 120            # seconds to remember nonces (2× skew window)
-_MAX_FAILS = 5              # failed attempts before lockout
-_FAIL_WINDOW = 300          # seconds to track failures in
-_LOCKOUT_DURATION = 300     # lockout length in seconds
+_TIMESTAMP_SKEW = 60  # seconds allowed either side of now
+_NONCE_TTL = 120  # seconds to remember nonces (2× skew window)
+_MAX_FAILS = 5  # failed attempts before lockout
+_FAIL_WINDOW = 300  # seconds to track failures in
+_LOCKOUT_DURATION = 300  # lockout length in seconds
 
 
 # ------------------------------------------------------------------
 # Nonce store — prevents request replay within the skew window
 # ------------------------------------------------------------------
+
 
 class NonceStore:
     """Thread-safe in-memory nonce store with TTL eviction."""
@@ -67,6 +68,7 @@ class NonceStore:
 # ------------------------------------------------------------------
 # Failed-auth tracker — IP lockout after repeated failures
 # ------------------------------------------------------------------
+
 
 class _FailedAuthTracker:
     def __init__(
@@ -109,7 +111,12 @@ class _FailedAuthTracker:
             count += 1
             if count >= self._max_fails:
                 locked_until = now + self._lockout
-                logger.warning("auth: locking out %s for %ds after %d failures", ip, self._lockout, count)
+                logger.warning(
+                    "auth: locking out %s for %ds after %d failures",
+                    ip,
+                    self._lockout,
+                    count,
+                )
             self._records[ip] = (count, window_start, locked_until)
 
     def record_success(self, ip: str) -> None:
@@ -123,6 +130,7 @@ _failed_auth = _FailedAuthTracker()
 # ------------------------------------------------------------------
 # Auth dependency
 # ------------------------------------------------------------------
+
 
 def _client_ip(request: Request) -> str:
     forwarded = request.headers.get("X-Forwarded-For")
@@ -143,7 +151,9 @@ async def require_api_key(
     ip = _client_ip(request)
 
     if _failed_auth.is_locked(ip):
-        raise HTTPException(status_code=429, detail="Too many failed auth attempts — try again later")
+        raise HTTPException(
+            status_code=429, detail="Too many failed auth attempts — try again later"
+        )
 
     # 1. Validate API key
     if not api_key or not hmac.compare_digest(api_key, config.api_key):
@@ -161,7 +171,9 @@ async def require_api_key(
         # At least one signing header present — enforce all three
         if not (ts_hdr and nonce_hdr and sig_hdr):
             _failed_auth.record_failure(ip)
-            raise HTTPException(status_code=403, detail="Incomplete request signing headers")
+            raise HTTPException(
+                status_code=403, detail="Incomplete request signing headers"
+            )
 
         # Validate timestamp skew
         try:
@@ -173,13 +185,17 @@ async def require_api_key(
         now = time.time()
         if abs(now - req_time) > _TIMESTAMP_SKEW:
             _failed_auth.record_failure(ip)
-            raise HTTPException(status_code=403, detail="Request timestamp out of range")
+            raise HTTPException(
+                status_code=403, detail="Request timestamp out of range"
+            )
 
         # Validate HMAC signature
         method = request.method.upper()
         path = request.url.path
         msg = f"{method}\n{path}\n{ts_hdr}\n{nonce_hdr}"
-        expected = hmac.new(config.api_key.encode(), msg.encode(), hashlib.sha256).hexdigest()
+        expected = hmac.new(
+            config.api_key.encode(), msg.encode(), hashlib.sha256
+        ).hexdigest()
         if not hmac.compare_digest(sig_hdr, expected):
             _failed_auth.record_failure(ip)
             raise HTTPException(status_code=403, detail="Invalid request signature")

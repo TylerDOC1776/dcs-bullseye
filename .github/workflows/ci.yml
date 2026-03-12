@@ -37,3 +37,22 @@ jobs:
 
       - name: Run tests
         run: pytest agent/tests/ -v
+
+  lint:
+    name: Python Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install ruff
+        run: pip install ruff
+
+      - name: Check style
+        run: ruff check orchestrator/ agent/ discord-bot/
+
+      - name: Check formatting
+        run: ruff format --check orchestrator/ agent/ discord-bot/

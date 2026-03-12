@@ -11,7 +11,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 DEFAULT_CONFIG_PATH = Path(
-    os.environ.get("DCS_ORCHESTRATOR_CONFIG", r"C:\ProgramData\DCSOrchestrator\config.json")
+    os.environ.get(
+        "DCS_ORCHESTRATOR_CONFIG", r"C:\ProgramData\DCSOrchestrator\config.json"
+    )
 )
 
 
@@ -57,7 +59,9 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> OrchestratorConfig:
         api_key=str(data.get("api_key", "")),
         host=str(data.get("host", "0.0.0.0")),
         port=int(data.get("port", 8888)),
-        db_path=str(data.get("db_path", r"C:\ProgramData\DCSOrchestrator\orchestrator.db")),
+        db_path=str(
+            data.get("db_path", r"C:\ProgramData\DCSOrchestrator\orchestrator.db")
+        ),
         log_level=str(data.get("log_level", "info")),
         public_url=str(data.get("public_url", "")),
         frp_server_addr=str(data.get("frp_server_addr", "")),

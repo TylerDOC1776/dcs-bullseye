@@ -17,7 +17,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from ..agent_client import AgentClient, AgentError
+from ..agent_client import AgentClient
 from ..config import OrchestratorConfig
 from ..database import Database
 from ..events import Event, EventBus
@@ -69,17 +69,19 @@ async def _status_poller(app: FastAPI) -> None:
 
             prev = last_known.get(inst_id)
             if prev is not None and prev != status:
-                bus.publish(Event(
-                    type="instance.status_changed",
-                    instance_id=inst_id,
-                    host_id=row["host_id"],
-                    data={
-                        "instanceId": inst_id,
-                        "name": row.get("name", inst_id),
-                        "status": status,
-                        "previousStatus": prev,
-                    },
-                ))
+                bus.publish(
+                    Event(
+                        type="instance.status_changed",
+                        instance_id=inst_id,
+                        host_id=row["host_id"],
+                        data={
+                            "instanceId": inst_id,
+                            "name": row.get("name", inst_id),
+                            "status": status,
+                            "previousStatus": prev,
+                        },
+                    )
+                )
             last_known[inst_id] = status
 
 
@@ -152,13 +154,16 @@ def create_app(config: OrchestratorConfig) -> FastAPI:
     # Installer static files — served unauthenticated from /install/
     # Contains agent.zip, install.ps1 (no secrets — secrets come from registration)
     import os
+
     _install_dir = os.environ.get("DCS_INSTALL_DIR", "/opt/dcs-platform/install")
     if os.path.isdir(_install_dir):
         app.mount("/install", StaticFiles(directory=_install_dir), name="install")
 
     # Global exception handlers → Problem JSON
     @app.exception_handler(HTTPException)
-    async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
+    async def http_exception_handler(
+        request: Request, exc: HTTPException
+    ) -> JSONResponse:
         return JSONResponse(
             status_code=exc.status_code,
             content=Problem(
@@ -170,7 +175,9 @@ def create_app(config: OrchestratorConfig) -> FastAPI:
         )
 
     @app.exception_handler(Exception)
-    async def general_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    async def general_exception_handler(
+        request: Request, exc: Exception
+    ) -> JSONResponse:
         logger.exception("Unhandled exception: %s", exc)
         return JSONResponse(
             status_code=500,
@@ -187,6 +194,7 @@ def create_app(config: OrchestratorConfig) -> FastAPI:
 
 def _http_status_phrase(code: int) -> str:
     import http
+
     try:
         return http.HTTPStatus(code).phrase
     except ValueError:

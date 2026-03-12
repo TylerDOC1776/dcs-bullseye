@@ -64,4 +64,5 @@ def main() -> None:
         if args.port is not None:
             config.port = args.port
         from .server import serve
+
         serve(config)

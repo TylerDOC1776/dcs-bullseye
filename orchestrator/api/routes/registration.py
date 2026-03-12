@@ -19,7 +19,6 @@ from ..auth import require_api_key
 from ..models import (
     InviteCreate,
     InviteResponse,
-    RegisterInstanceSpec,
     RegisterRequest,
     RegisterResponse,
 )
@@ -39,10 +38,14 @@ async def register_host(body: RegisterRequest, request: Request) -> JSONResponse
     config = request.app.state.config
 
     if not config.registration_enabled:
-        raise HTTPException(status_code=403, detail="Host registration is currently disabled")
+        raise HTTPException(
+            status_code=403, detail="Host registration is currently disabled"
+        )
 
     if not config.frp_server_addr:
-        raise HTTPException(status_code=503, detail="frp not configured on this orchestrator")
+        raise HTTPException(
+            status_code=503, detail="frp not configured on this orchestrator"
+        )
 
     # Validate invite
     invite = await db.get_invite_by_code(body.inviteCode)
@@ -61,7 +64,9 @@ async def register_host(body: RegisterRequest, request: Request) -> JSONResponse
             config.frp_port_range_start, config.frp_port_range_end
         )
     except RuntimeError:
-        raise HTTPException(status_code=503, detail="No frp ports available — contact admin")
+        raise HTTPException(
+            status_code=503, detail="No frp ports available — contact admin"
+        )
 
     # Generate per-host agent API key
     agent_api_key = secrets.token_hex(32)
@@ -116,7 +121,9 @@ async def list_invites(request: Request) -> list[InviteResponse]:
     return [InviteResponse(**r) for r in rows]
 
 
-@router.post("/invites", response_model=InviteResponse, status_code=201, dependencies=_ADMIN_DEP)
+@router.post(
+    "/invites", response_model=InviteResponse, status_code=201, dependencies=_ADMIN_DEP
+)
 async def create_invite(body: InviteCreate, request: Request) -> InviteResponse:
     db: Database = request.app.state.db
     expires_at = (

@@ -19,7 +19,7 @@ from datetime import datetime, timezone
 
 import aiohttp
 
-from .config import AgentConfig, InstanceConfig
+from .config import AgentConfig
 from .controller import DcsController
 
 logger = logging.getLogger(__name__)
@@ -54,7 +54,9 @@ async def _post_events(
         ) as resp:
             if resp.status not in (200, 204):
                 text = await resp.text()
-                logger.warning("[analytics] POST failed %s: %s", resp.status, text[:200])
+                logger.warning(
+                    "[analytics] POST failed %s: %s", resp.status, text[:200]
+                )
     except Exception as exc:
         logger.debug("[analytics] POST error: %s", exc)
 
@@ -62,7 +64,9 @@ async def _post_events(
 async def run_reporter(config: AgentConfig, ctrl: DcsController) -> None:
     """Main analytics reporter loop. Runs until cancelled."""
     if not config.orchestrator_url or not config.host_id:
-        logger.info("[analytics] orchestrator_url or host_id not set — reporter disabled")
+        logger.info(
+            "[analytics] orchestrator_url or host_id not set — reporter disabled"
+        )
         return
 
     logger.info(
@@ -86,7 +90,11 @@ async def run_reporter(config: AgentConfig, ctrl: DcsController) -> None:
                 try:
                     info = await loop.run_in_executor(None, ctrl.runtime_info, inst)
                 except Exception as exc:
-                    logger.debug("[analytics] runtime_info failed for %s: %s", inst.service_name, exc)
+                    logger.debug(
+                        "[analytics] runtime_info failed for %s: %s",
+                        inst.service_name,
+                        exc,
+                    )
                     continue
 
                 prev = state[inst.service_name]
@@ -96,35 +104,41 @@ async def run_reporter(config: AgentConfig, ctrl: DcsController) -> None:
 
                 # Player joins
                 for name in current_players - prev.players:
-                    events.append({
-                        "instance_id": inst.service_name,
-                        "event_type": "player_join",
-                        "player_name": name,
-                        "mission_name": current_mission,
-                        "map": current_map,
-                        "timestamp": _now_iso(),
-                    })
+                    events.append(
+                        {
+                            "instance_id": inst.service_name,
+                            "event_type": "player_join",
+                            "player_name": name,
+                            "mission_name": current_mission,
+                            "map": current_map,
+                            "timestamp": _now_iso(),
+                        }
+                    )
 
                 # Player leaves
                 for name in prev.players - current_players:
-                    events.append({
-                        "instance_id": inst.service_name,
-                        "event_type": "player_leave",
-                        "player_name": name,
-                        "mission_name": prev.mission_name,
-                        "map": current_map,
-                        "timestamp": _now_iso(),
-                    })
+                    events.append(
+                        {
+                            "instance_id": inst.service_name,
+                            "event_type": "player_leave",
+                            "player_name": name,
+                            "mission_name": prev.mission_name,
+                            "map": current_map,
+                            "timestamp": _now_iso(),
+                        }
+                    )
 
                 # Mission change
                 if current_mission and current_mission != prev.mission_name:
-                    events.append({
-                        "instance_id": inst.service_name,
-                        "event_type": "mission_start",
-                        "mission_name": current_mission,
-                        "map": current_map,
-                        "timestamp": _now_iso(),
-                    })
+                    events.append(
+                        {
+                            "instance_id": inst.service_name,
+                            "event_type": "mission_start",
+                            "mission_name": current_mission,
+                            "map": current_map,
+                            "timestamp": _now_iso(),
+                        }
+                    )
 
                 state[inst.service_name] = _InstanceState(
                     players=current_players,

@@ -62,41 +62,45 @@ _CONTEXT_LINES = 6
 
 # Patterns that indicate a real scripting/Lua error
 _SCRIPTING_ERROR_RE = re.compile(
-    r"ERROR\s+SCRIPTING"            # ERROR level SCRIPTING category
-    r"|WARNING\s+SCRIPTING.*[Ee]rror"   # SCRIPTING warning that contains "error"
-    r"|LuaError"                    # explicit Lua error tag
-    r"|stack traceback:"            # Lua stack trace header
-    r"|\bError in '[^']+'"          # Error in 'callback_name'
+    r"ERROR\s+SCRIPTING"  # ERROR level SCRIPTING category
+    r"|WARNING\s+SCRIPTING.*[Ee]rror"  # SCRIPTING warning that contains "error"
+    r"|LuaError"  # explicit Lua error tag
+    r"|stack traceback:"  # Lua stack trace header
+    r"|\bError in '[^']+'"  # Error in 'callback_name'
     r"|\bMission script error\b"
 )
 
 # Patterns that indicate a real DCS engine error (non-scripting)
 _DCS_ERROR_RE = re.compile(
-    r"ERROR\s+(?!SCRIPTING)"        # ERROR level, any category except SCRIPTING
-    r"|ALERT\s+"                    # any ALERT level line
+    r"ERROR\s+(?!SCRIPTING)"  # ERROR level, any category except SCRIPTING
+    r"|ALERT\s+"  # any ALERT level line
     r"|\bCRITICAL\b"
 )
 
 # Known-harmless noise: matches → skip the line entirely
 _NOISE_PATTERNS: list[re.Pattern] = [
-    re.compile(r"\bINFO\b"),                              # all INFO lines
-    re.compile(r"\bDEBUG\b"),                             # all DEBUG lines
-    re.compile(r"WARNING\s+SCRIPTING(?!.*[Ee]rror)"),     # SCRIPTING warnings without "error"
-    re.compile(r"WARNING\s+Net\b"),                       # network hiccups
-    re.compile(r"WARNING\s+EDCORE"),                      # EDCORE perf warnings
-    re.compile(r"Cannot find.*liveri", re.I),             # missing livery files
-    re.compile(r"Cannot find.*sound", re.I),              # missing sound files
-    re.compile(r"Cannot find.*texture", re.I),            # missing textures
-    re.compile(r"Error running DCS GUI", re.I),           # normal shutdown message
-    re.compile(r"OptionsBackground.*[Ee]rror", re.I),     # GUI option errors
-    re.compile(r"W:EDCORE.*fps", re.I),                   # FPS performance warnings
-    re.compile(r"VoiceChat.*disconnect", re.I),           # SRS voice disconnects
-    re.compile(r"Config.*\.lua.*not found", re.I),        # optional config files
+    re.compile(r"\bINFO\b"),  # all INFO lines
+    re.compile(r"\bDEBUG\b"),  # all DEBUG lines
+    re.compile(
+        r"WARNING\s+SCRIPTING(?!.*[Ee]rror)"
+    ),  # SCRIPTING warnings without "error"
+    re.compile(r"WARNING\s+Net\b"),  # network hiccups
+    re.compile(r"WARNING\s+EDCORE"),  # EDCORE perf warnings
+    re.compile(r"Cannot find.*liveri", re.I),  # missing livery files
+    re.compile(r"Cannot find.*sound", re.I),  # missing sound files
+    re.compile(r"Cannot find.*texture", re.I),  # missing textures
+    re.compile(r"Error running DCS GUI", re.I),  # normal shutdown message
+    re.compile(r"OptionsBackground.*[Ee]rror", re.I),  # GUI option errors
+    re.compile(r"W:EDCORE.*fps", re.I),  # FPS performance warnings
+    re.compile(r"VoiceChat.*disconnect", re.I),  # SRS voice disconnects
+    re.compile(r"Config.*\.lua.*not found", re.I),  # optional config files
     # Engine asset / driver loading (EDCORE — not actionable)
     re.compile(r"No suitable driver found to mount", re.I),
     re.compile(r"ZipDriver.*Failed to open zip archive.*\.gitkeep", re.I),
     re.compile(r"Drivers errors while mounting.*\.gitkeep", re.I),
-    re.compile(r"Failed to load.*\.dll.*\(\d+\)"),        # DLL load failures with OS error codes
+    re.compile(
+        r"Failed to load.*\.dll.*\(\d+\)"
+    ),  # DLL load failures with OS error codes
     # Weapon/avionics configuration (ED module data bugs — not actionable)
     re.compile(r"Scheme doesn't have an input lead named", re.I),
     re.compile(r"negative (?:drag|weight) of payload\b", re.I),
@@ -139,9 +143,9 @@ def _classify_error(line: str) -> str | None:
 def _is_context_line(line: str) -> bool:
     """Return True for lines that are context/continuation (stack trace lines, etc.)."""
     return bool(
-        re.match(r"\s+", line)                  # indented (stack trace body)
+        re.match(r"\s+", line)  # indented (stack trace body)
         or "stack traceback" in line
-        or re.match(r"\s*\[", line)             # Lua source reference [file]:line
+        or re.match(r"\s*\[", line)  # Lua source reference [file]:line
     )
 
 
@@ -183,7 +187,9 @@ def _dedup_blocks(blocks: list[list[str]]) -> list[str]:
                 break
         result.extend(block)
         if count > 1:
-            result.append(f"    ... (repeated {count - 1} more time{'s' if count > 2 else ''}, last at {last_ts})")
+            result.append(
+                f"    ... (repeated {count - 1} more time{'s' if count > 2 else ''}, last at {last_ts})"
+            )
         result.append("")
         i = j
 
@@ -196,6 +202,7 @@ def _dedup_blocks(blocks: list[list[str]]) -> list[str]:
 # Task Scheduler helpers (for instances with manager="task")
 # ------------------------------------------------------------------
 
+
 def _kill_any_dcs_server() -> None:
     """Kill DCS_server.exe processes that were NOT started with a -w flag.
 
@@ -205,11 +212,16 @@ def _kill_any_dcs_server() -> None:
     so this only removes unmanaged orphans.
     """
     subprocess.run(
-        ["powershell", "-NoProfile", "-Command",
-         "Get-CimInstance Win32_Process -Filter \"name='DCS_server.exe'\" "
-         "| Where-Object { $_.CommandLine -notlike '*-w *' } "
-         "| ForEach-Object { Stop-Process -Id $_.ProcessId -Force }"],
-        capture_output=True, text=True,
+        [
+            "powershell",
+            "-NoProfile",
+            "-Command",
+            "Get-CimInstance Win32_Process -Filter \"name='DCS_server.exe'\" "
+            "| Where-Object { $_.CommandLine -notlike '*-w *' } "
+            "| ForEach-Object { Stop-Process -Id $_.ProcessId -Force }",
+        ],
+        capture_output=True,
+        text=True,
     )
 
 
@@ -218,10 +230,13 @@ def _task_start(task_name: str) -> None:
     _kill_any_dcs_server()
     result = subprocess.run(
         ["schtasks", "/run", "/tn", task_name],
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     )
     if result.returncode != 0:
-        raise RuntimeError(f"schtasks /run failed: {(result.stdout + result.stderr).strip()}")
+        raise RuntimeError(
+            f"schtasks /run failed: {(result.stdout + result.stderr).strip()}"
+        )
 
 
 def _task_stop(saved_games_key: str, task_name: str = "") -> None:
@@ -237,7 +252,8 @@ def _task_stop(saved_games_key: str, task_name: str = "") -> None:
     )
     result = subprocess.run(
         ["powershell", "-NoProfile", "-Command", ps],
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     )
     if result.returncode != 0:
         raise RuntimeError(f"Could not find/stop DCS process for {saved_games_key!r}")
@@ -245,7 +261,8 @@ def _task_stop(saved_games_key: str, task_name: str = "") -> None:
     if task_name:
         subprocess.run(
             ["schtasks", "/end", "/tn", task_name],
-            capture_output=True, text=True,
+            capture_output=True,
+            text=True,
         )
 
 
@@ -258,7 +275,8 @@ def _task_status(saved_games_key: str) -> str:
     )
     result = subprocess.run(
         ["powershell", "-NoProfile", "-Command", ps],
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     )
     return result.stdout.strip() or "SERVICE_STOPPED"
 
@@ -277,7 +295,8 @@ def _task_runtime(saved_games_key: str) -> dict:
     )
     result = subprocess.run(
         ["powershell", "-NoProfile", "-Command", ps],
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     )
     try:
         return json.loads(result.stdout.strip())
@@ -319,7 +338,9 @@ def _read_hook_status(log_path: str) -> dict:
     if updated_at_str:
         try:
             updated_at = datetime.fromisoformat(updated_at_str.replace("Z", "+00:00"))
-            if (datetime.now(timezone.utc) - updated_at).total_seconds() > _HOOK_STALE_SECONDS:
+            if (
+                datetime.now(timezone.utc) - updated_at
+            ).total_seconds() > _HOOK_STALE_SECONDS:
                 data["player_count"] = 0
                 data["players"] = []
                 return data
@@ -328,7 +349,9 @@ def _read_hook_status(log_path: str) -> dict:
     return data
 
 
-def _get_mission_info_from_log(log_path: str) -> tuple[str | None, str | None, str | None]:
+def _get_mission_info_from_log(
+    log_path: str,
+) -> tuple[str | None, str | None, str | None]:
     """Return (started_at_iso, mission_name, theatre) from the last completed loadMission in the DCS log.
 
     Scans the full log file so it works even for servers that have been running for weeks.
@@ -374,16 +397,16 @@ def _get_mission_info_from_log(log_path: str) -> tuple[str | None, str | None, s
         except ValueError:
             return None, None, None
     # DCS logs use local time; convert to UTC correctly
-    return datetime.fromtimestamp(dt.timestamp(), tz=timezone.utc).isoformat(), last_name, last_theatre
+    return (
+        datetime.fromtimestamp(dt.timestamp(), tz=timezone.utc).isoformat(),
+        last_name,
+        last_theatre,
+    )
 
 
 def _patch_mission_list(content: str, lua_path: str) -> str:
     """Replace the missionList block in serverSettings.lua with a single-entry list."""
-    replacement = (
-        '["missionList"] =\n\t{\n'
-        f'\t\t[1] = "{lua_path}",\n'
-        "\t}"
-    )
+    replacement = f'["missionList"] =\n\t{{\n\t\t[1] = "{lua_path}",\n\t}}'
     # Use a lambda so re.sub doesn't interpret backslashes in the replacement string
     patched, n = re.subn(
         r'\["missionList"\]\s*=\s*\{[^}]*\}',
@@ -420,7 +443,9 @@ class DcsController:
 
         _nssm.set_param(n, svc, "Description", f"DCS World — {instance.name}")
 
-        start_type = "SERVICE_AUTO_START" if instance.auto_start else "SERVICE_DEMAND_START"
+        start_type = (
+            "SERVICE_AUTO_START" if instance.auto_start else "SERVICE_DEMAND_START"
+        )
         _nssm.set_param(n, svc, "Start", start_type)
 
         # Redirect stdout/stderr to a per-service log file
@@ -463,6 +488,7 @@ class DcsController:
         if instance.manager == "task":
             _task_stop(instance.saved_games_key, task_name=instance.service_name)
             import time
+
             time.sleep(2)  # let Task Scheduler clear running state before re-triggering
             _task_start(instance.service_name)
         else:
@@ -491,7 +517,9 @@ class DcsController:
         log_theatre: str | None = None
         hook: dict = {}
         if status_raw == "SERVICE_RUNNING":
-            mission_started_at, log_mission_name, log_theatre = _get_mission_info_from_log(instance.log_path)
+            mission_started_at, log_mission_name, log_theatre = (
+                _get_mission_info_from_log(instance.log_path)
+            )
             hook = _read_hook_status(instance.log_path)
 
         return {
@@ -506,17 +534,22 @@ class DcsController:
             "player_count": hook.get("player_count"),
             "players": hook.get("players") or [],
             # Only expose in-game time when mission is actually loaded (avoids showing 0:00:00)
-            "mission_time_seconds": hook.get("mission_time_seconds") if hook.get("mission_loaded") else None,
+            "mission_time_seconds": hook.get("mission_time_seconds")
+            if hook.get("mission_loaded")
+            else None,
         }
 
     def minimize_windows(self) -> None:
         """Minimize all DCS_server.exe windows via the DCS-MinimizeWindows Task Scheduler task."""
         result = subprocess.run(
             ["schtasks", "/run", "/tn", "DCS-MinimizeWindows"],
-            capture_output=True, text=True,
+            capture_output=True,
+            text=True,
         )
         if result.returncode != 0:
-            raise RuntimeError(f"minimize task failed: {(result.stdout + result.stderr).strip()}")
+            raise RuntimeError(
+                f"minimize task failed: {(result.stdout + result.stderr).strip()}"
+            )
 
     # ------------------------------------------------------------------
     # Bulk helpers
@@ -572,7 +605,9 @@ class DcsController:
 
         lua_path = str(mission_path).replace("\\", "\\\\")
         content = settings_path.read_text(encoding="utf-8")
-        settings_path.write_text(_patch_mission_list(content, lua_path), encoding="utf-8")
+        settings_path.write_text(
+            _patch_mission_list(content, lua_path), encoding="utf-8"
+        )
 
         self.restart(instance)
         return str(mission_path)
@@ -592,7 +627,9 @@ class DcsController:
                 buffer.append(line)
         return list(buffer)
 
-    def parse_errors(self, instance: InstanceConfig, search_lines: int = 5000) -> dict[str, list[str]]:
+    def parse_errors(
+        self, instance: InstanceConfig, search_lines: int = 5000
+    ) -> dict[str, list[str]]:
         """
         Parse the DCS log and return two lists of real errors, filtered for noise.
 
@@ -661,7 +698,9 @@ class DcsController:
             "dcs_errors": _dedup_blocks(dcs_blocks),
         }
 
-    def scripting_errors(self, instance: InstanceConfig, search_lines: int = 5000) -> list[str]:
+    def scripting_errors(
+        self, instance: InstanceConfig, search_lines: int = 5000
+    ) -> list[str]:
         """Legacy wrapper — returns scripting_errors from parse_errors."""
         return self.parse_errors(instance, search_lines)["scripting_errors"]
 
@@ -688,8 +727,13 @@ class DcsController:
             raise FileNotFoundError(f"Mission not found: {src}")
         dest = Path(active_dir) / filename
         import shutil
+
         shutil.copy2(src, dest)
-        return {"filename": filename, "path": str(dest), "size_bytes": dest.stat().st_size}
+        return {
+            "filename": filename,
+            "path": str(dest),
+            "size_bytes": dest.stat().st_size,
+        }
 
     def upload_active_mission(self, filename: str, data: bytes) -> dict:
         """Save uploaded bytes to active_missions_dir root, overwriting any existing file."""
@@ -722,7 +766,9 @@ class DcsController:
 
     def set_password(self, instance: InstanceConfig, password: str) -> None:
         """Patch ["password"] in serverSettings.lua, then restart the server."""
-        settings_path = Path(instance.missions_dir).parent / "Config" / "serverSettings.lua"
+        settings_path = (
+            Path(instance.missions_dir).parent / "Config" / "serverSettings.lua"
+        )
         if not settings_path.exists():
             raise FileNotFoundError(f"serverSettings.lua not found: {settings_path}")
         content = settings_path.read_text(encoding="utf-8")
@@ -782,6 +828,7 @@ class DcsController:
         DCS_updater.exe can authenticate without a Task Scheduler task.
         """
         import threading
+
         if self._UPDATE_STATUS_FILE.exists():
             try:
                 self._UPDATE_STATUS_FILE.unlink()
@@ -799,7 +846,9 @@ class DcsController:
             "message": message,
             "updated_at": datetime.now(timezone.utc).isoformat(),
         }
-        self._UPDATE_STATUS_FILE.write_text(json.dumps(data, indent=4), encoding="utf-8")
+        self._UPDATE_STATUS_FILE.write_text(
+            json.dumps(data, indent=4), encoding="utf-8"
+        )
 
     def _run_update(self) -> None:
         """Background thread: stop instances → update DCS → restart instances."""
@@ -812,12 +861,16 @@ class DcsController:
 
             instances = self._config.instances
             if not instances:
-                self._write_update_status("failed", False, "No instances found in config")
+                self._write_update_status(
+                    "failed", False, "No instances found in config"
+                )
                 return
 
             updater_path = Path(instances[0].exe_path).parent / "DCS_updater.exe"
             if not updater_path.exists():
-                self._write_update_status("failed", False, f"DCS_updater.exe not found at: {updater_path}")
+                self._write_update_status(
+                    "failed", False, f"DCS_updater.exe not found at: {updater_path}"
+                )
                 return
 
             # Read current version before updating
@@ -826,20 +879,26 @@ class DcsController:
             version_before = "unknown"
             if cfg_path.exists():
                 try:
-                    version_before = json.loads(cfg_path.read_text(encoding="utf-8")).get("version", "unknown")
+                    version_before = json.loads(
+                        cfg_path.read_text(encoding="utf-8")
+                    ).get("version", "unknown")
                 except Exception:
                     pass
 
             # Stop all instances
             self._write_update_status("stopping", True, "Stopping all DCS servers...")
             for inst in instances:
-                subprocess.run(["schtasks", "/end", "/tn", inst.service_name], capture_output=True)
+                subprocess.run(
+                    ["schtasks", "/end", "/tn", inst.service_name], capture_output=True
+                )
                 ps = (
                     f"$p = Get-CimInstance Win32_Process -Filter \"name='DCS_server.exe'\" "
                     f"| Where-Object {{ $_.CommandLine -like '*{inst.saved_games_key}*' }}; "
                     f"if ($p) {{ Stop-Process -Id $p.ProcessId -Force }}"
                 )
-                subprocess.run(["powershell", "-NoProfile", "-Command", ps], capture_output=True)
+                subprocess.run(
+                    ["powershell", "-NoProfile", "-Command", ps], capture_output=True
+                )
             time.sleep(10)
 
             # Fetch latest version from DCS changelog
@@ -850,7 +909,9 @@ class DcsController:
                     timeout=10,
                 ) as resp:
                     content = resp.read().decode("utf-8", errors="ignore")
-                m = re.search(r"/en/news/changelog/release/(\d+\.\d+\.\d+\.\d+)/", content)
+                m = re.search(
+                    r"/en/news/changelog/release/(\d+\.\d+\.\d+\.\d+)/", content
+                )
                 if m:
                     target_version = m.group(1)
             except Exception:
@@ -869,22 +930,32 @@ class DcsController:
                 if target_version
                 else [str(updater_path), "--quiet", "update"]
             )
-            result = subprocess.run(cmd, capture_output=True, text=True, cwd=str(updater_path.parent))
+            result = subprocess.run(
+                cmd, capture_output=True, text=True, cwd=str(updater_path.parent)
+            )
             if result.returncode != 0:
-                self._write_update_status("failed", False, f"DCS_updater.exe failed with exit code {result.returncode}")
+                self._write_update_status(
+                    "failed",
+                    False,
+                    f"DCS_updater.exe failed with exit code {result.returncode}",
+                )
                 return
 
             # Restart all instances
             self._write_update_status("restarting", True, "Restarting DCS servers...")
             for inst in instances:
-                subprocess.run(["schtasks", "/run", "/tn", inst.service_name], capture_output=True)
+                subprocess.run(
+                    ["schtasks", "/run", "/tn", inst.service_name], capture_output=True
+                )
                 time.sleep(5)
 
             # Read version after and report
             version_after = "unknown"
             if cfg_path.exists():
                 try:
-                    version_after = json.loads(cfg_path.read_text(encoding="utf-8")).get("version", "unknown")
+                    version_after = json.loads(
+                        cfg_path.read_text(encoding="utf-8")
+                    ).get("version", "unknown")
                 except Exception:
                     pass
 
@@ -900,9 +971,17 @@ class DcsController:
     def get_update_status(self) -> dict:
         """Read the current DCS update status from the status JSON written by the update script."""
         if not self._UPDATE_STATUS_FILE.exists():
-            return {"phase": "idle", "running": False, "message": "No update in progress"}
+            return {
+                "phase": "idle",
+                "running": False,
+                "message": "No update in progress",
+            }
         try:
             # utf-8-sig strips BOM if present (e.g. written by PowerShell Set-Content)
             return json.loads(self._UPDATE_STATUS_FILE.read_text(encoding="utf-8-sig"))
         except (OSError, json.JSONDecodeError):
-            return {"phase": "unknown", "running": False, "message": "Could not read status"}
+            return {
+                "phase": "unknown",
+                "running": False,
+                "message": "Could not read status",
+            }
