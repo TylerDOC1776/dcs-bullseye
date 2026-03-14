@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DCS Bullseye</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #0d0f12;
+      --surface:  #151820;
+      --border:   #2a2f3a;
+      --accent:   #4e9af1;
+      --accent2:  #f1a44e;
+      --text:     #d4d8e2;
+      --muted:    #6b7280;
+      --radius:   6px;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      font-size: 16px;
+      line-height: 1.6;
+    }
+
+    /* ── Nav ── */
+    nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 1rem 2rem;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+    .nav-logo {
+      font-size: 1.1rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      color: var(--accent);
+      text-decoration: none;
+    }
+    .nav-links { display: flex; gap: 1.5rem; }
+    .nav-links a {
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 0.9rem;
+      transition: color 0.15s;
+    }
+    .nav-links a:hover { color: var(--text); }
+
+    /* ── Hero ── */
+    .hero {
+      text-align: center;
+      padding: 6rem 2rem 4rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .hero-label {
+      display: inline-block;
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--accent);
+      border: 1px solid var(--accent);
+      border-radius: var(--radius);
+      padding: 0.25rem 0.75rem;
+      margin-bottom: 1.5rem;
+    }
+    h1 {
+      font-size: clamp(2rem, 5vw, 3.5rem);
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      margin-bottom: 1rem;
+      color: #fff;
+    }
+    .hero p {
+      max-width: 560px;
+      margin: 0 auto 2.5rem;
+      color: var(--muted);
+      font-size: 1.1rem;
+    }
+    .hero-actions { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
+
+    /* ── Buttons ── */
+    .btn {
+      display: inline-block;
+      padding: 0.65rem 1.5rem;
+      border-radius: var(--radius);
+      font-size: 0.95rem;
+      font-weight: 600;
+      text-decoration: none;
+      transition: opacity 0.15s, transform 0.1s;
+      cursor: pointer;
+    }
+    .btn:hover { opacity: 0.85; transform: translateY(-1px); }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-secondary { background: transparent; color: var(--text); border: 1px solid var(--border); }
+
+    /* ── Sections ── */
+    .section { padding: 5rem 2rem; }
+    .section-inner { max-width: 960px; margin: 0 auto; }
+    .section-title {
+      font-size: 1.6rem;
+      font-weight: 700;
+      margin-bottom: 0.5rem;
+      color: #fff;
+    }
+    .section-sub {
+      color: var(--muted);
+      margin-bottom: 3rem;
+      max-width: 520px;
+    }
+
+    /* ── Card grid ── */
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1.25rem; }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.5rem;
+    }
+    .card-icon { font-size: 1.5rem; margin-bottom: 0.75rem; }
+    .card h3 { font-size: 1rem; font-weight: 600; color: #fff; margin-bottom: 0.4rem; }
+    .card p { font-size: 0.9rem; color: var(--muted); }
+
+    /* ── Divider ── */
+    .divider { border: none; border-top: 1px solid var(--border); }
+
+    /* ── CTA strip ── */
+    .cta {
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      text-align: center;
+      padding: 4rem 2rem;
+    }
+    .cta h2 { font-size: 1.8rem; font-weight: 700; color: #fff; margin-bottom: 0.75rem; }
+    .cta p { color: var(--muted); margin-bottom: 2rem; }
+    .cta-actions { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
+
+    /* ── Footer ── */
+    footer {
+      text-align: center;
+      padding: 2rem;
+      font-size: 0.82rem;
+      color: var(--muted);
+      border-top: 1px solid var(--border);
+    }
+    footer a { color: var(--muted); text-decoration: underline; }
+  </style>
+</head>
+<body>
+
+  <nav>
+    <a class="nav-logo" href="#">DCS BULLSEYE</a>
+    <div class="nav-links">
+      <a href="#players">Players</a>
+      <a href="#hosts">Community Hosts</a>
+      <a href="https://github.com/TylerDOC1776/dcs-bullseye" target="_blank">GitHub</a>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <section class="hero">
+    <div class="hero-label">DCS World Server Platform</div>
+    <h1>Command your server.<br>From anywhere.</h1>
+    <p>DCS Bullseye is a Discord-native management platform for DCS World dedicated servers. Start missions, manage players, and monitor your server — all without touching the machine.</p>
+    <div class="hero-actions">
+      <a class="btn btn-primary" href="https://github.com/TylerDOC1776/dcs-bullseye" target="_blank">View on GitHub</a>
+    </div>
+  </section>
+
+  <!-- Players -->
+  <section class="section" id="players">
+    <div class="section-inner">
+      <p class="hero-label" style="margin-bottom:0.75rem;">For Players</p>
+      <h2 class="section-title">Everything you need, right in Discord</h2>
+      <p class="section-sub">Check server status, see active missions, and get notified about what's happening — without leaving your voice channel.</p>
+      <div class="cards">
+        <div class="card">
+          <div class="card-icon">📡</div>
+          <h3>Live Server Status</h3>
+          <p>See which servers are online, what mission is running, and how many players are connected in real time.</p>
+        </div>
+        <div class="card">
+          <div class="card-icon">🗺️</div>
+          <h3>Mission Info</h3>
+          <p>Know what's loaded before you hop in. Mission name, theater, and player count — all from a single command.</p>
+        </div>
+        <div class="card">
+          <div class="card-icon">📊</div>
+          <h3>Player Stats</h3>
+          <p>Register your DCS pilot name and track your session history, flight time, and activity across all connected servers.</p>
+        </div>
+        <div class="card">
+          <div class="card-icon">🔔</div>
+          <h3>Server Alerts</h3>
+          <p>Automatic Discord notifications when servers start, stop, crash, or change mission.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="divider" />
+
+  <!-- Hosts -->
+  <section class="section" id="hosts">
+    <div class="section-inner">
+      <p class="hero-label" style="margin-bottom:0.75rem; border-color: var(--accent2); color: var(--accent2);">For Community Hosts</p>
+      <h2 class="section-title">Run your server. Control it from Discord.</h2>
+      <p class="section-sub">Bullseye gives server operators full remote control over DCS dedicated servers through a lightweight Windows agent and a centralized orchestrator.</p>
+      <div class="cards">
+        <div class="card">
+          <div class="card-icon">⚙️</div>
+          <h3>Full Server Control</h3>
+          <p>Start, stop, restart, and update DCS — all through Discord slash commands with role-based access control.</p>
+        </div>
+        <div class="card">
+          <div class="card-icon">🗃️</div>
+          <h3>Mission Management</h3>
+          <p>Upload, load, download, and rotate missions remotely. No RDP required.</p>
+        </div>
+        <div class="card">
+          <div class="card-icon">🔐</div>
+          <h3>RBAC Permissions</h3>
+          <p>Three permission tiers — viewer, operator, admin — so you control who can do what on your server.</p>
+        </div>
+        <div class="card">
+          <div class="card-icon">📦</div>
+          <h3>One-Command Install</h3>
+          <p>A single PowerShell command installs and registers the agent. No manual config files, no port forwarding required.</p>
+        </div>
+        <div class="card">
+          <div class="card-icon">🔄</div>
+          <h3>Auto DCS Updates</h3>
+          <p>Trigger DCS World updates remotely with live Discord progress tracking while the updater runs.</p>
+        </div>
+        <div class="card">
+          <div class="card-icon">🛡️</div>
+          <h3>No Public IP Needed</h3>
+          <p>The agent connects out to the platform via an encrypted reverse tunnel. Your Windows machine never needs to be publicly exposed.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <div class="cta">
+    <h2>Ready to get started?</h2>
+    <p>Check out the source on GitHub or open an issue to get involved.</p>
+    <div class="cta-actions">
+      <a class="btn btn-primary" href="https://github.com/TylerDOC1776/dcs-bullseye" target="_blank">GitHub</a>
+    </div>
+  </div>
+
+  <footer>
+    DCS Bullseye &mdash; open source DCS World server management &mdash;
+    <a href="https://github.com/TylerDOC1776/dcs-bullseye" target="_blank">GitHub</a>
+  </footer>
+
+</body>
+</html>
