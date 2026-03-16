@@ -343,6 +343,7 @@ def _read_hook_status(log_path: str) -> dict:
             ).total_seconds() > _HOOK_STALE_SECONDS:
                 data["player_count"] = 0
                 data["players"] = []
+                data["_stale"] = True
                 return data
         except (ValueError, TypeError):
             pass
@@ -521,6 +522,8 @@ class DcsController:
                 _get_mission_info_from_log(instance.log_path)
             )
             hook = _read_hook_status(instance.log_path)
+            if hook.get("_stale"):
+                status_raw = "SERVICE_DEGRADED"
 
         return {
             "status": status_raw,

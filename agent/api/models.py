@@ -16,6 +16,7 @@ class InstanceStatus(str, Enum):
     stopped = "stopped"
     starting = "starting"
     stopping = "stopping"
+    degraded = "degraded"
     error = "error"
     unknown = "unknown"
 
@@ -26,6 +27,7 @@ _NSSM_STATUS_MAP: dict[str, InstanceStatus] = {
     "SERVICE_START_PENDING": InstanceStatus.starting,
     "SERVICE_STOP_PENDING": InstanceStatus.stopping,
     "SERVICE_PAUSED": InstanceStatus.stopped,
+    "SERVICE_DEGRADED": InstanceStatus.degraded,
 }
 
 
