@@ -544,7 +544,11 @@ class DcsCog(commands.Cog):
 
             if attempt > _KEEPALIVE_MAX_ATTEMPTS:
                 self._keepalive_exhausted.add(instance_id)
-                log.warning("Keepalive: giving up on %s after %d attempts", name, _KEEPALIVE_MAX_ATTEMPTS)
+                log.warning(
+                    "Keepalive: giving up on %s after %d attempts",
+                    name,
+                    _KEEPALIVE_MAX_ATTEMPTS,
+                )
                 if channel:
                     await channel.send(
                         f"⛔ Auto-start failed for **{name}** after {_KEEPALIVE_MAX_ATTEMPTS} attempts — "
@@ -552,7 +556,12 @@ class DcsCog(commands.Cog):
                     )
                 continue
 
-            log.info("Keepalive: starting stopped instance %s (attempt %d/%d)", name, attempt, _KEEPALIVE_MAX_ATTEMPTS)
+            log.info(
+                "Keepalive: starting stopped instance %s (attempt %d/%d)",
+                name,
+                attempt,
+                _KEEPALIVE_MAX_ATTEMPTS,
+            )
             if channel:
                 await channel.send(
                     f"🔁 Auto-starting **{name}** — instance was stopped (attempt {attempt}/{_KEEPALIVE_MAX_ATTEMPTS})."
