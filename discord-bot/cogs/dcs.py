@@ -35,6 +35,7 @@ _STATUS_COLOURS: dict[str, int] = {
     "error": 0xE74C3C,
     "starting": 0xE67E22,
     "stopping": 0xE67E22,
+    "degraded": 0xE67E22,
 }
 _COLOUR_UNKNOWN = 0x95A5A6
 
@@ -166,7 +167,7 @@ def _instances_summary_embed(instances: list[dict]) -> discord.Embed:
             else "🔴"
             if status in ("stopped", "error")
             else "🟡"
-            if status in ("starting", "stopping")
+            if status in ("starting", "stopping", "degraded")
             else "⚫"
         )
         lines = [f"{dot} {status.title()}"]
@@ -291,6 +292,7 @@ class _ConfirmView(discord.ui.View):
 # ------------------------------------------------------------------ #
 
 _KEEPALIVE_COOLDOWN = 20 * 60  # seconds between restart attempts per instance
+_KEEPALIVE_MAX_ATTEMPTS = 3
 
 _UPDATE_PHASE_COLOURS: dict[str, int] = {
     "starting": 0xE67E22,
@@ -332,6 +334,9 @@ class DcsCog(commands.Cog):
         self._status_message_id: int | None = None
         # keepalive cooldown: instance_id → monotonic time of last start attempt
         self._keepalive_last_attempt: dict[str, float] = {}
+        # keepalive attempt counter and exhausted set
+        self._keepalive_attempts: dict[str, int] = {}
+        self._keepalive_exhausted: set[str] = set()
         self.dcs: app_commands.Group = app_commands.Group(
             name="dcs", description="Manage DCS World server instances"
         )
@@ -495,8 +500,10 @@ class DcsCog(commands.Cog):
                     await channel.send(f"❌ Auto-restart failed for **{name}**: {exc}")
 
     def keepalive_clear(self, instance_id: str) -> None:
-        """Clear the keepalive cooldown for an instance (call when it reaches 'running')."""
+        """Clear the keepalive state for an instance (call when it reaches 'running')."""
         self._keepalive_last_attempt.pop(instance_id, None)
+        self._keepalive_attempts.pop(instance_id, None)
+        self._keepalive_exhausted.discard(instance_id)
 
     async def _run_keepalive_check(self) -> None:
         """Start any non-excluded instance that is stopped."""
@@ -518,6 +525,9 @@ class DcsCog(commands.Cog):
             if runtime.get("status") != "stopped":
                 continue
 
+            if instance_id in self._keepalive_exhausted:
+                continue
+
             last = self._keepalive_last_attempt.get(instance_id)
             if last is not None and now - last < _KEEPALIVE_COOLDOWN:
                 remaining = int(_KEEPALIVE_COOLDOWN - (now - last))
@@ -528,11 +538,24 @@ class DcsCog(commands.Cog):
                 )
                 continue
 
+            attempt = self._keepalive_attempts.get(instance_id, 0) + 1
+            self._keepalive_attempts[instance_id] = attempt
             self._keepalive_last_attempt[instance_id] = now
-            log.info("Keepalive: starting stopped instance %s", name)
+
+            if attempt > _KEEPALIVE_MAX_ATTEMPTS:
+                self._keepalive_exhausted.add(instance_id)
+                log.warning("Keepalive: giving up on %s after %d attempts", name, _KEEPALIVE_MAX_ATTEMPTS)
+                if channel:
+                    await channel.send(
+                        f"⛔ Auto-start failed for **{name}** after {_KEEPALIVE_MAX_ATTEMPTS} attempts — "
+                        f"manual intervention required."
+                    )
+                continue
+
+            log.info("Keepalive: starting stopped instance %s (attempt %d/%d)", name, attempt, _KEEPALIVE_MAX_ATTEMPTS)
             if channel:
                 await channel.send(
-                    f"🔁 Auto-starting **{name}** — instance was stopped."
+                    f"🔁 Auto-starting **{name}** — instance was stopped (attempt {attempt}/{_KEEPALIVE_MAX_ATTEMPTS})."
                 )
             try:
                 await self.client.trigger_action(
