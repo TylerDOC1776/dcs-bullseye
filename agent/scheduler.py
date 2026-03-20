@@ -40,6 +40,7 @@ _DAY_NAMES = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
 # Schedule storage helpers
 # ---------------------------------------------------------------------------
 
+
 def _load_schedules() -> dict:
     if SCHEDULES_FILE.exists():
         try:
@@ -73,6 +74,7 @@ def get_schedule(instance_name: str) -> dict | None:
 # Background task
 # ---------------------------------------------------------------------------
 
+
 async def run_scheduler(config: AgentConfig, ctrl: DcsController) -> None:
     """Main scheduler loop. Runs until cancelled."""
     logger.info("[scheduler] started — %d instance(s)", len(config.instances))
@@ -80,10 +82,10 @@ async def run_scheduler(config: AgentConfig, ctrl: DcsController) -> None:
     # Per-instance mutable state (not persisted — resets on agent restart)
     state: dict[str, dict] = {
         inst.name: {
-            "last_player_time": None,   # wall-clock timestamp of last non-zero player count
-            "mission_idx": 0,           # current position in playlist
-            "current_mission": None,    # mission name last seen (for tracking rotations)
-            "mission_wall_start": None, # wall-clock time when current mission was first seen
+            "last_player_time": None,  # wall-clock timestamp of last non-zero player count
+            "mission_idx": 0,  # current position in playlist
+            "current_mission": None,  # mission name last seen (for tracking rotations)
+            "mission_wall_start": None,  # wall-clock time when current mission was first seen
         }
         for inst in config.instances
     }
@@ -140,7 +142,8 @@ async def _tick_instance(
             if idle_secs >= idle_minutes * 60:
                 logger.info(
                     "[scheduler] idle restart %s (idle %.0f min)",
-                    inst.name, idle_secs / 60,
+                    inst.name,
+                    idle_secs / 60,
                 )
                 state["last_player_time"] = None
                 state["mission_wall_start"] = None
@@ -150,17 +153,26 @@ async def _tick_instance(
     # --- Mission rotation ---------------------------------------------------
     playlist: list[str] = sched.get("mission_playlist") or []
     rotate_minutes = sched.get("rotate_real_minutes")
-    if rotate_minutes and playlist and running and state["mission_wall_start"] is not None:
+    if (
+        rotate_minutes
+        and playlist
+        and running
+        and state["mission_wall_start"] is not None
+    ):
         elapsed = datetime.now(timezone.utc).timestamp() - state["mission_wall_start"]
         if elapsed >= rotate_minutes * 60:
             next_idx = (state["mission_idx"] + 1) % len(playlist)
             next_mission = playlist[next_idx]
             logger.info(
                 "[scheduler] rotating %s → %s (elapsed %.0f min)",
-                inst.name, next_mission, elapsed / 60,
+                inst.name,
+                next_mission,
+                elapsed / 60,
             )
             state["mission_idx"] = next_idx
-            state["mission_wall_start"] = None  # reset; will be set when new mission detected
+            state["mission_wall_start"] = (
+                None  # reset; will be set when new mission detected
+            )
             await loop.run_in_executor(None, ctrl.mission_load, inst, next_mission)
             return
 
@@ -174,7 +186,9 @@ async def _tick_instance(
     try:
         tz = ZoneInfo(tz_name)
     except ZoneInfoNotFoundError:
-        logger.warning("[scheduler] unknown timezone %r for %s — using UTC", tz_name, inst.name)
+        logger.warning(
+            "[scheduler] unknown timezone %r for %s — using UTC", tz_name, inst.name
+        )
         tz = ZoneInfo("UTC")
 
     now = datetime.now(tz)

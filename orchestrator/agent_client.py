@@ -270,7 +270,9 @@ class AgentClient:
         """GET /agent/v1/instances/{serviceId}/schedule."""
         return await self._get(f"/instances/{service_name}/schedule")
 
-    async def set_instance_schedule(self, service_name: str, schedule: dict) -> dict[str, Any]:
+    async def set_instance_schedule(
+        self, service_name: str, schedule: dict
+    ) -> dict[str, Any]:
         """PUT /agent/v1/instances/{serviceId}/schedule."""
         return await self._put(f"/instances/{service_name}/schedule", schedule)
 
