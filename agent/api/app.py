@@ -16,6 +16,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from ..analytics import run_reporter
+from ..scheduler import run_scheduler
 from ..config import AgentConfig
 from ..controller import DcsController
 from ..jobs import JobStore
@@ -26,6 +27,7 @@ from .routes import capabilities as capabilities_routes
 from .routes import instances as instances_routes
 from .routes import actions as actions_routes
 from .routes import jobs as jobs_routes
+from .routes import schedule as schedule_routes
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +59,7 @@ def create_app(config: AgentConfig) -> FastAPI:
     app.include_router(instances_routes.router, **_v1_kwargs)
     app.include_router(actions_routes.router, **_v1_kwargs)
     app.include_router(jobs_routes.router, **_v1_kwargs)
+    app.include_router(schedule_routes.router, **_v1_kwargs)
 
     # Global exception handlers → Problem JSON
     @app.exception_handler(HTTPException)
@@ -114,6 +117,9 @@ def create_app(config: AgentConfig) -> FastAPI:
 
         # Analytics reporter -- push player/mission events to orchestrator
         asyncio.create_task(run_reporter(config, app.state.controller))
+
+        # Mission scheduler -- idle restarts, rotation, open/close windows
+        asyncio.create_task(run_scheduler(config, app.state.controller))
 
     async def _auto_start_instances(ctrl: DcsController, instances: list) -> None:
         loop = asyncio.get_running_loop()
