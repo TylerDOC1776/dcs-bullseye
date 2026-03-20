@@ -73,6 +73,36 @@ Stops all DCS servers on a specific host, runs the DCS World updater, then resta
 
 ---
 
+## Scheduling
+
+Scheduling lets the bot automatically manage server hours, idle restarts, and mission rotation without manual intervention. Each setting is independent — you can set just idle restart, just a time window, or combine all three. Settings persist across agent restarts.
+
+### `/dcs schedule-view <instance>`
+Shows the current schedule for an instance — open/close hours, idle restart threshold, and mission playlist if set.
+
+### `/dcs schedule-idle <instance> <minutes>`
+Automatically restarts the server after it has had zero players for the specified number of minutes. Set to `0` to disable.
+
+**Example:** `/dcs schedule-idle MyServer 30` — restart after 30 minutes with no players.
+
+### `/dcs schedule-hours <instance> <open_time> <close_time> [timezone] [days]`
+Sets automatic open and close times for a server. The server starts at `open_time` if stopped and shuts down at `close_time` if empty. Either time can be omitted if you only need one. Overnight windows (e.g. `18:00` → `02:00`) are handled correctly.
+
+- `timezone` — IANA timezone string (default `UTC`), e.g. `America/New_York`, `America/Chicago`, `Europe/London`
+- `days` — comma-separated list of active days, e.g. `fri,sat,sun` (default: every day)
+
+**Example:** `/dcs schedule-hours MyServer 18:00 02:00 America/New_York fri,sat,sun`
+
+### `/dcs schedule-playlist <instance> <missions> [rotate_minutes]`
+Sets a mission rotation playlist. Missions are comma-separated filenames from the Active Missions folder. If `rotate_minutes` is set, the server automatically loads the next mission in the list after that many wall-clock minutes. Set `rotate_minutes` to `0` to keep the playlist without auto-rotation (manual `/dcs mission` will still follow the list on next use).
+
+**Example:** `/dcs schedule-playlist MyServer caucasus_pvp.miz,syria_pvp.miz,sinai_pvp.miz 120`
+
+### `/dcs schedule-clear <instance>`
+Removes all scheduling from an instance. The server will no longer auto-start, auto-stop, idle-restart, or rotate missions.
+
+---
+
 ## Analytics
 
 ### `/dcs stats [instance] [period]`
