@@ -2029,6 +2029,98 @@ class DcsCog(commands.Cog):
                     f"Orchestrator error: {exc.detail}", ephemeral=True
                 )
 
+        # ---- timezone autocomplete ----------------------------------------- #
+
+        async def _timezone_autocomplete(
+            interaction: discord.Interaction,
+            current: str,
+        ) -> list[app_commands.Choice[str]]:
+            zones = [
+                "UTC",
+                "America/New_York",
+                "America/Chicago",
+                "America/Denver",
+                "America/Los_Angeles",
+                "America/Anchorage",
+                "America/Halifax",
+                "America/Sao_Paulo",
+                "Europe/London",
+                "Europe/Paris",
+                "Europe/Berlin",
+                "Europe/Helsinki",
+                "Europe/Moscow",
+                "Asia/Dubai",
+                "Asia/Kolkata",
+                "Asia/Bangkok",
+                "Asia/Singapore",
+                "Asia/Tokyo",
+                "Asia/Seoul",
+                "Australia/Sydney",
+                "Australia/Perth",
+                "Pacific/Auckland",
+                "Pacific/Honolulu",
+            ]
+            low = current.lower()
+            return [
+                app_commands.Choice(name=z, value=z) for z in zones if low in z.lower()
+            ][:25]
+
+        # ---- days autocomplete --------------------------------------------- #
+
+        async def _days_autocomplete(
+            interaction: discord.Interaction,
+            current: str,
+        ) -> list[app_commands.Choice[str]]:
+            presets = [
+                ("All days", "mon,tue,wed,thu,fri,sat,sun"),
+                ("Weekdays", "mon,tue,wed,thu,fri"),
+                ("Weekends", "sat,sun"),
+                ("Fri–Sun", "fri,sat,sun"),
+                ("Sat–Sun", "sat,sun"),
+                ("Thu–Sun", "thu,fri,sat,sun"),
+                ("Monday", "mon"),
+                ("Tuesday", "tue"),
+                ("Wednesday", "wed"),
+                ("Thursday", "thu"),
+                ("Friday", "fri"),
+                ("Saturday", "sat"),
+                ("Sunday", "sun"),
+            ]
+            low = current.lower()
+            return [
+                app_commands.Choice(name=label, value=value)
+                for label, value in presets
+                if low in label.lower() or low in value.lower()
+            ][:25]
+
+        # ---- playlist mission autocomplete ---------------------------------- #
+
+        async def _playlist_mission_autocomplete(
+            interaction: discord.Interaction,
+            current: str,
+        ) -> list[app_commands.Choice[str]]:
+            instance_name = getattr(interaction.namespace, "instance", None)
+            if not instance_name:
+                return []
+            try:
+                instances = await client.list_instances()
+                inst = next((i for i in instances if i["name"] == instance_name), None)
+                if not inst:
+                    return []
+                items = await client.list_active_missions(inst["hostId"])
+            except Exception:
+                return []
+            low = current.lower()
+            choices = []
+            for m in items:
+                filename = m.get("relative_path", m.get("name", ""))
+                if not filename:
+                    continue
+                if low and low not in filename.lower():
+                    continue
+                choices.append(app_commands.Choice(name=filename[:100], value=filename))
+            return choices[:25]
+
         @self.dcs.command(
             name="schedule-hours",
             description="Set open/close times for a DCS instance",
@@ -2037,16 +2129,20 @@ class DcsCog(commands.Cog):
             instance="Instance to configure",
             open_time='Time to start the server, e.g. "18:00"',
             close_time='Time to stop the server (only if empty), e.g. "02:00"',
-            timezone='IANA timezone, e.g. "America/New_York" (default UTC)',
-            days='Comma-separated active days, e.g. "fri,sat,sun" (default all)',
+            timezone="IANA timezone (pick from list or type)",
+            days="Active days (pick a preset or type comma-separated)",
         )
-        @app_commands.autocomplete(instance=_instance_autocomplete)
+        @app_commands.autocomplete(
+            instance=_instance_autocomplete,
+            timezone=_timezone_autocomplete,
+            days=_days_autocomplete,
+        )
         async def cmd_schedule_hours(
             interaction: discord.Interaction,
             instance: str,
             open_time: str | None = None,
             close_time: str | None = None,
-            timezone: str = "UTC",
+            timezone: str | None = None,
             days: str | None = None,
         ) -> None:
             if not await _check_channel(interaction):
@@ -2054,9 +2150,9 @@ class DcsCog(commands.Cog):
             if not await _require_operator(interaction):
                 return
             await interaction.response.defer(ephemeral=True)
-            if not open_time and not close_time:
+            if not open_time and not close_time and timezone is None and not days:
                 await interaction.followup.send(
-                    "Provide at least one of `open_time` or `close_time`.",
+                    "Provide at least one field to update.",
                     ephemeral=True,
                 )
                 return
@@ -2066,7 +2162,8 @@ class DcsCog(commands.Cog):
                     sched["open_time"] = open_time
                 if close_time:
                     sched["close_time"] = close_time
-                sched["timezone"] = timezone
+                if timezone is not None:
+                    sched["timezone"] = timezone
                 if days:
                     sched["days"] = [d.strip().lower() for d in days.split(",")]
                 await client.set_instance_schedule(instance, sched)
@@ -2084,10 +2181,13 @@ class DcsCog(commands.Cog):
         )
         @app_commands.describe(
             instance="Instance to configure",
-            missions="Comma-separated mission filenames to rotate through",
+            missions="Mission filename (select from list; for multiple, type comma-separated)",
             rotate_minutes="Rotate to next mission every N minutes (0 = manual only)",
         )
-        @app_commands.autocomplete(instance=_instance_autocomplete)
+        @app_commands.autocomplete(
+            instance=_instance_autocomplete,
+            missions=_playlist_mission_autocomplete,
+        )
         async def cmd_schedule_playlist(
             interaction: discord.Interaction,
             instance: str,
