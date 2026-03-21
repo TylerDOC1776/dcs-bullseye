@@ -2110,11 +2110,16 @@ class DcsCog(commands.Cog):
                 items = await client.list_active_missions(inst["hostId"])
             except Exception:
                 return []
+            ns = interaction.namespace
+            already = {getattr(ns, f"mission_{i}", None) for i in range(1, 6)} - {
+                None,
+                current,
+            }
             low = current.lower()
             choices = []
             for m in items:
                 filename = m.get("relative_path", m.get("name", ""))
-                if not filename:
+                if not filename or filename in already:
                     continue
                 if low and low not in filename.lower():
                     continue
@@ -2181,17 +2186,29 @@ class DcsCog(commands.Cog):
         )
         @app_commands.describe(
             instance="Instance to configure",
-            missions="Mission filename (select from list; for multiple, type comma-separated)",
+            mission_1="First mission in the rotation",
+            mission_2="Second mission",
+            mission_3="Third mission",
+            mission_4="Fourth mission",
+            mission_5="Fifth mission",
             rotate_minutes="Rotate to next mission every N minutes (0 = manual only)",
         )
         @app_commands.autocomplete(
             instance=_instance_autocomplete,
-            missions=_playlist_mission_autocomplete,
+            mission_1=_playlist_mission_autocomplete,
+            mission_2=_playlist_mission_autocomplete,
+            mission_3=_playlist_mission_autocomplete,
+            mission_4=_playlist_mission_autocomplete,
+            mission_5=_playlist_mission_autocomplete,
         )
         async def cmd_schedule_playlist(
             interaction: discord.Interaction,
             instance: str,
-            missions: str,
+            mission_1: str,
+            mission_2: str | None = None,
+            mission_3: str | None = None,
+            mission_4: str | None = None,
+            mission_5: str | None = None,
             rotate_minutes: int = 0,
         ) -> None:
             if not await _check_channel(interaction):
@@ -2201,7 +2218,11 @@ class DcsCog(commands.Cog):
             await interaction.response.defer(ephemeral=True)
             try:
                 sched = await client.get_instance_schedule(instance) or {}
-                playlist = [m.strip() for m in missions.split(",") if m.strip()]
+                playlist = [
+                    m
+                    for m in [mission_1, mission_2, mission_3, mission_4, mission_5]
+                    if m
+                ]
                 sched["mission_playlist"] = playlist
                 if rotate_minutes > 0:
                     sched["rotate_real_minutes"] = rotate_minutes
